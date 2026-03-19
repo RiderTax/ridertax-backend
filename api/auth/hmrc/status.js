@@ -6,30 +6,44 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  const { user_id } = req.query;
-
-  if (!user_id) {
-    return res.status(400).json({ error: "Missing user_id" });
-  }
-
   try {
+    const { user_id } = req.query;
+
+    // ✅ Validate input
+    if (!user_id || user_id === "YOUR_USER_ID") {
+      return res.status(200).json({
+        connected: false,
+        connected_at: null,
+      });
+    }
+
     const { data, error } = await supabase
-  .from("hmrc_tokens")
-  .select("created_at")
-  .eq("user_id", user_id)
-  .maybeSingle();
+      .from("hmrc_tokens")
+      .select("created_at")
+      .eq("user_id", user_id)
+      .maybeSingle();
 
-// ✅ IMPORTANT FIX
-if (error && error.code !== "PGRST116") {
-  console.error(error);
-  return res.status(500).json({ error: "Database error" });
-}
+    // ✅ Ignore "no rows" error
+    if (error && error.code !== "PGRST116") {
+      console.error("Supabase error:", error);
+      return res.status(200).json({
+        connected: false,
+        connected_at: null,
+      });
+    }
 
-// ✅ No row = not connected (NORMAL)
-return res.status(200).json({
-  connected: !!data,
-  connected_at: data?.created_at || null,
-});
-    return res.status(500).json({ error: "Server error" });
+    return res.status(200).json({
+      connected: !!data,
+      connected_at: data?.created_at || null,
+    });
+
+  } catch (err) {
+    console.error("Server crash:", err);
+
+    // ✅ NEVER crash frontend
+    return res.status(200).json({
+      connected: false,
+      connected_at: null,
+    });
   }
 }
