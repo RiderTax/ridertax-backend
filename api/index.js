@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   const url = req.url;
 
   // ✅ Root test
-  if (url === "/api" || url === "/api/") {
+  if (url === "/" || url === "") {
     return res.status(200).send("Backend running ✅");
   }
 
