@@ -38,6 +38,6 @@ export default async function handler(req, res) {
     res.redirect("https://rider-tax-flow.base44.app/settings?hmrc=connected");
   } catch (error) {
     console.error(error.response?.data || error.message);
-    res.status(500).send("Error connecting to HMRC");
+    res.redirect("https://rider-tax-flow.base44.app/settings?hmrc=failed");
   }
 }
