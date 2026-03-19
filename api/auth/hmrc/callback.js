@@ -7,7 +7,7 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  const { code } = req.query;
+  const { code, state } = req.query;
 
   try {
     const response = await axios.post(
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     const data = response.data;
 
     await supabase.from("hmrc_tokens").upsert({
-      user_id: "11111111-1111-1111-1111-111111111111",
+      user_id: state,
       access_token: data.access_token,
       refresh_token: data.refresh_token,
       expires_at: new Date(Date.now() + data.expires_in * 1000),
