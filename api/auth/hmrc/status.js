@@ -14,29 +14,22 @@ export default async function handler(req, res) {
 
   try {
     const { data, error } = await supabase
-      .from("hmrc_tokens")
-      .select("user_id, created_at")
-      .eq("user_id", user_id)
-      .maybeSingle();
+  .from("hmrc_tokens")
+  .select("created_at")
+  .eq("user_id", user_id)
+  .maybeSingle();
 
-    if (error) {
-      console.error(error);
-      return res.status(500).json({ error: "Database error" });
-    }
+// ✅ IMPORTANT FIX
+if (error && error.code !== "PGRST116") {
+  console.error(error);
+  return res.status(500).json({ error: "Database error" });
+}
 
-    if (!data) {
-      return res.status(200).json({
-        connected: false,
-        connected_at: null,
-      });
-    }
-
-    return res.status(200).json({
-      connected: true,
-      connected_at: data.created_at,
-    });
-  } catch (err) {
-    console.error(err);
+// ✅ No row = not connected (NORMAL)
+return res.status(200).json({
+  connected: !!data,
+  connected_at: data?.created_at || null,
+});
     return res.status(500).json({ error: "Server error" });
   }
 }
