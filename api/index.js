@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   }
 
   // ✅ HMRC callback
-  if (url.startsWith("/api/auth/hmrc/callback")) {
+  if (url.startsWith("/auth/hmrc/callback")) {
     const code = req.query.code;
 
     try {
