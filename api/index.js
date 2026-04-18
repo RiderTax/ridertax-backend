@@ -3,6 +3,7 @@ import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import serverless from "serverless-http";
 
 dotenv.config();
 
@@ -26,14 +27,14 @@ app.get("/", (req, res) => {
 // ===============================
 app.get("/auth/hmrc/callback", async (req, res) => {
   const { code, state } = req.query;
-const userId = state;
 
-if (!userId) {
-  return res.status(400).send("Missing user context");
-}
+  const userId = state;
+
+  if (!userId) {
+    return res.status(400).send("Missing user context");
+  }
 
   try {
-    // 🔁 Exchange code for tokens
     const response = await axios.post(
       `${process.env.HMRC_BASE_URL}/oauth/token`,
       new URLSearchParams({
@@ -50,7 +51,6 @@ if (!userId) {
 
     const data = response.data;
 
-    // ✅ SAVE TO SUPABASE (WITH DEBUG)
     const { data: saved, error } = await supabase
       .from("hmrc_tokens")
       .upsert({
@@ -126,8 +126,44 @@ app.get("/hmrc/refresh/:userId", async (req, res) => {
 });
 
 // ===============================
-// 🚀 START SERVER
+// 🛡️ HMRC FRAUD HEADER VALIDATION
 // ===============================
-import serverless from "serverless-http";
+app.get("/hmrc/validate-headers", async (req, res) => {
+  try {
+    const fraudHeaders = {
+      "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
+      "Gov-Client-User-Agent": req.headers["user-agent"] || "unknown",
+      "Gov-Client-Public-IP":
+        req.headers["x-forwarded-for"]?.split(",")[0] || "127.0.0.1",
+      "Gov-Client-Timezone": "UTC",
+      "Gov-Vendor-Product-Name": "RiderTax",
+      "Gov-Vendor-Version": "1.0.0",
+    };
 
+    const response = await axios.post(
+      `${process.env.HMRC_BASE_URL}/test/fraud-prevention-headers/validate`,
+      {},
+      { headers: fraudHeaders }
+    );
+
+    res.json({
+      success: true,
+      hmrc_response: response.data,
+    });
+  } catch (error) {
+    console.error(
+      "VALIDATION ERROR:",
+      error.response?.data || error.message
+    );
+
+    res.status(400).json({
+      success: false,
+      error: error.response?.data || error.message,
+    });
+  }
+});
+
+// ===============================
+// 🚀 EXPORT FOR VERCEL
+// ===============================
 export default serverless(app);
