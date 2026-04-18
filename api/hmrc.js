@@ -1,5 +1,5 @@
 export const config = {
-  runtime: "nodejs"
+  runtime: "nodejs",
 };
 
 import express from "express";
@@ -7,6 +7,7 @@ import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import serverless from "serverless-http";
 
 dotenv.config();
 
@@ -20,9 +21,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ✅ Health check
+// ===============================
+// ✅ BASE ROUTE (IMPORTANT FIX)
+// ===============================
 app.get("/", (req, res) => {
-  res.send("Backend running ✅");
+  res.send("HMRC API Root Working ✅");
 });
 
 // ===============================
@@ -78,7 +81,7 @@ app.get("/auth/hmrc/callback", async (req, res) => {
 // ===============================
 // 🔄 REFRESH TOKEN
 // ===============================
-app.get("/hmrc/refresh/:userId", async (req, res) => {
+app.get("/refresh/:userId", async (req, res) => {
   const { userId } = req.params;
 
   const { data, error } = await supabase
@@ -107,19 +110,14 @@ app.get("/hmrc/refresh/:userId", async (req, res) => {
 
     const newData = response.data;
 
-    const { data: saved, error: saveError } = await supabase
-      .from("hmrc_tokens")
-      .upsert({
-        user_id: userId,
-        access_token: newData.access_token,
-        refresh_token: newData.refresh_token,
-        expires_at: new Date(Date.now() + newData.expires_in * 1000),
-        scope: newData.scope,
-        token_type: newData.token_type,
-      });
-
-    console.log("🔄 Refresh Saved:", saved);
-    console.log("❌ Refresh Error:", saveError);
+    await supabase.from("hmrc_tokens").upsert({
+      user_id: userId,
+      access_token: newData.access_token,
+      refresh_token: newData.refresh_token,
+      expires_at: new Date(Date.now() + newData.expires_in * 1000),
+      scope: newData.scope,
+      token_type: newData.token_type,
+    });
 
     res.send("Token refreshed ✅");
   } catch (err) {
@@ -129,9 +127,9 @@ app.get("/hmrc/refresh/:userId", async (req, res) => {
 });
 
 // ===============================
-// 🛡️ HMRC FRAUD HEADER VALIDATION
+// 🛡️ FRAUD HEADER VALIDATION
 // ===============================
-app.get("/hmrc/validate-headers", async (req, res) => {
+app.get("/validate-headers", async (req, res) => {
   try {
     const fraudHeaders = {
       "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -154,10 +152,7 @@ app.get("/hmrc/validate-headers", async (req, res) => {
       hmrc_response: response.data,
     });
   } catch (error) {
-    console.error(
-      "VALIDATION ERROR:",
-      error.response?.data || error.message
-    );
+    console.error("VALIDATION ERROR:", error.response?.data || error.message);
 
     res.status(400).json({
       success: false,
@@ -166,5 +161,5 @@ app.get("/hmrc/validate-headers", async (req, res) => {
   }
 });
 
-// ✅ EXPORT FOR VERCEL
-export default app;
+// ✅ EXPORT (THIS IS CRITICAL FOR VERCEL)
+export default serverless(app);
