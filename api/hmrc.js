@@ -162,4 +162,4 @@ app.get("/validate-headers", async (req, res) => {
 });
 
 // ✅ EXPORT (THIS IS CRITICAL FOR VERCEL)
-export default serverless(app);
+export default (req, res) => app(req, res);
