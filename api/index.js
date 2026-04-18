@@ -166,4 +166,4 @@ app.get("/hmrc/validate-headers", async (req, res) => {
 // ===============================
 // 🚀 EXPORT FOR VERCEL
 // ===============================
-export default serverless(app);
+export default app;
