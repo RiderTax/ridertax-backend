@@ -7,7 +7,6 @@ import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import serverless from "serverless-http";
 
 dotenv.config();
 
@@ -21,22 +20,16 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ===============================
-// ✅ BASE ROUTE (IMPORTANT FIX)
-// ===============================
+// ✅ ROOT
 app.get("/", (req, res) => {
   res.send("HMRC API Root Working ✅");
 });
 
-// ===============================
-// 🔐 HMRC CALLBACK (LOGIN)
-// ===============================
+// 🔐 CALLBACK
 app.get("/auth/hmrc/callback", async (req, res) => {
   const { code, state } = req.query;
 
-  const userId = state;
-
-  if (!userId) {
+  if (!state) {
     return res.status(400).send("Missing user context");
   }
 
@@ -48,51 +41,42 @@ app.get("/auth/hmrc/callback", async (req, res) => {
         client_id: process.env.HMRC_CLIENT_ID,
         client_secret: process.env.HMRC_CLIENT_SECRET,
         redirect_uri: process.env.HMRC_REDIRECT_URI,
-        code: code,
+        code,
       }),
       {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       }
     );
 
-    const data = response.data;
+    const token = response.data;
 
-    const { data: saved, error } = await supabase
-      .from("hmrc_tokens")
-      .upsert({
-        user_id: userId,
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-        expires_at: new Date(Date.now() + data.expires_in * 1000),
-        scope: data.scope,
-        token_type: data.token_type,
-      });
-
-    console.log("✅ Saved:", saved);
-    console.log("❌ Error:", error);
+    await supabase.from("hmrc_tokens").upsert({
+      user_id: state,
+      access_token: token.access_token,
+      refresh_token: token.refresh_token,
+      expires_at: new Date(Date.now() + token.expires_in * 1000),
+      scope: token.scope,
+      token_type: token.token_type,
+    });
 
     res.send("HMRC connected successfully ✅");
-  } catch (error) {
-    console.error("HMRC ERROR:", error.response?.data || error.message);
-    res.status(500).send("Error connecting to HMRC");
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res.status(500).send("HMRC connection failed");
   }
 });
 
-// ===============================
-// 🔄 REFRESH TOKEN
-// ===============================
+// 🔄 REFRESH
 app.get("/refresh/:userId", async (req, res) => {
   const { userId } = req.params;
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("hmrc_tokens")
     .select("*")
     .eq("user_id", userId)
     .single();
 
-  if (error || !data) {
-    return res.status(404).send("User not found");
-  }
+  if (!data) return res.status(404).send("User not found");
 
   try {
     const response = await axios.post(
@@ -108,58 +92,37 @@ app.get("/refresh/:userId", async (req, res) => {
       }
     );
 
-    const newData = response.data;
+    const token = response.data;
 
     await supabase.from("hmrc_tokens").upsert({
       user_id: userId,
-      access_token: newData.access_token,
-      refresh_token: newData.refresh_token,
-      expires_at: new Date(Date.now() + newData.expires_in * 1000),
-      scope: newData.scope,
-      token_type: newData.token_type,
+      access_token: token.access_token,
+      refresh_token: token.refresh_token,
+      expires_at: new Date(Date.now() + token.expires_in * 1000),
+      scope: token.scope,
+      token_type: token.token_type,
     });
 
     res.send("Token refreshed ✅");
   } catch (err) {
-    console.error("REFRESH ERROR:", err.response?.data || err.message);
     res.status(500).send("Refresh failed");
   }
 });
 
-// ===============================
-// 🛡️ FRAUD HEADER VALIDATION
-// ===============================
+// 🛡️ FRAUD CHECK
 app.get("/validate-headers", async (req, res) => {
   try {
-    const fraudHeaders = {
-      "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
-      "Gov-Client-User-Agent": req.headers["user-agent"] || "unknown",
-      "Gov-Client-Public-IP":
-        req.headers["x-forwarded-for"]?.split(",")[0] || "127.0.0.1",
-      "Gov-Client-Timezone": "UTC",
-      "Gov-Vendor-Product-Name": "RiderTax",
-      "Gov-Vendor-Version": "1.0.0",
-    };
-
     const response = await axios.post(
       `${process.env.HMRC_BASE_URL}/test/fraud-prevention-headers/validate`,
       {},
-      { headers: fraudHeaders }
+      { headers: { "Gov-Vendor-Product-Name": "RiderTax" } }
     );
 
-    res.json({
-      success: true,
-      hmrc_response: response.data,
-    });
-  } catch (error) {
-    console.error("VALIDATION ERROR:", error.response?.data || error.message);
-
-    res.status(400).json({
-      success: false,
-      error: error.response?.data || error.message,
-    });
+    res.json(response.data);
+  } catch (err) {
+    res.status(400).json(err.response?.data || err.message);
   }
 });
 
-// ✅ EXPORT (THIS IS CRITICAL FOR VERCEL)
+// ✅ FINAL EXPORT (IMPORTANT)
 export default (req, res) => app(req, res);
