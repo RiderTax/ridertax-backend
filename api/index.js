@@ -1,9 +1,12 @@
+export const config = {
+  runtime: "nodejs"
+};
+
 import express from "express";
 import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import serverless from "serverless-http";
 
 dotenv.config();
 
@@ -163,7 +166,5 @@ app.get("/hmrc/validate-headers", async (req, res) => {
   }
 });
 
-// ===============================
-// 🚀 EXPORT FOR VERCEL
-// ===============================
+// ✅ EXPORT FOR VERCEL
 export default app;
