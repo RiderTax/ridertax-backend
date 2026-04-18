@@ -12,19 +12,19 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  const { url, method } = req;
+  const path = req.url || "";
 
   // ===============================
   // ✅ ROOT
   // ===============================
-  if (url === "/api/hmrc") {
+  if (path === "/api/hmrc" || path === "/api/hmrc/") {
     return res.send("HMRC API Root Working ✅");
   }
 
   // ===============================
   // 🛡️ VALIDATE HEADERS
   // ===============================
-  if (url.includes("/validate-headers")) {
+  if (path.endsWith("/validate-headers")) {
     try {
       const fraudHeaders = {
         "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
         { headers: fraudHeaders }
       );
 
-      return res.json({
+      return res.status(200).json({
         success: true,
         hmrc_response: response.data,
       });
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
   // ===============================
   // 🔐 CALLBACK
   // ===============================
-  if (url.includes("/auth/hmrc/callback")) {
+  if (path.includes("/auth/hmrc/callback")) {
     const { code, state } = req.query;
 
     if (!state) {
@@ -99,8 +99,8 @@ export default async function handler(req, res) {
   // ===============================
   // 🔄 REFRESH
   // ===============================
-  if (url.includes("/refresh")) {
-    const userId = url.split("/").pop();
+  if (path.includes("/refresh")) {
+    const userId = path.split("/").pop();
 
     const { data } = await supabase
       .from("hmrc_tokens")
