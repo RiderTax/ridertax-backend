@@ -14,17 +14,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ CREATE ROUTER (IMPORTANT)
+// ✅ Router (important for Vercel)
 const router = express.Router();
 
-// ✅ Supabase client
+// ✅ Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 // ===============================
-// ✅ ROOT (FIXED)
+// ✅ ROOT
 // ===============================
 router.get("/", (req, res) => {
   res.send("HMRC API Root Working ✅");
@@ -68,13 +68,13 @@ router.get("/auth/hmrc/callback", async (req, res) => {
 
     res.send("HMRC connected successfully ✅");
   } catch (err) {
-    console.error(err.response?.data || err.message);
+    console.error("CALLBACK ERROR:", err.response?.data || err.message);
     res.status(500).send("HMRC connection failed");
   }
 });
 
 // ===============================
-// 🔄 REFRESH
+// 🔄 REFRESH TOKEN
 // ===============================
 router.get("/refresh/:userId", async (req, res) => {
   const { userId } = req.params;
@@ -114,33 +114,52 @@ router.get("/refresh/:userId", async (req, res) => {
 
     res.send("Token refreshed ✅");
   } catch (err) {
+    console.error("REFRESH ERROR:", err.response?.data || err.message);
     res.status(500).send("Refresh failed");
   }
 });
 
 // ===============================
-// 🛡️ FRAUD CHECK
+// 🛡️ FRAUD HEADER VALIDATION
 // ===============================
 router.get("/validate-headers", async (req, res) => {
   try {
+    const fraudHeaders = {
+      "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
+      "Gov-Client-User-Agent": req.headers["user-agent"] || "unknown",
+      "Gov-Client-Public-IP":
+        req.headers["x-forwarded-for"]?.split(",")[0] || "127.0.0.1",
+      "Gov-Client-Timezone": "UTC",
+      "Gov-Vendor-Product-Name": "RiderTax",
+      "Gov-Vendor-Version": "1.0.0",
+    };
+
     const response = await axios.post(
       `${process.env.HMRC_BASE_URL}/test/fraud-prevention-headers/validate`,
       {},
-      { headers: { "Gov-Vendor-Product-Name": "RiderTax" } }
+      { headers: fraudHeaders }
     );
 
-    res.json(response.data);
+    res.json({
+      success: true,
+      hmrc_response: response.data,
+    });
   } catch (err) {
-    res.status(400).json(err.response?.data || err.message);
+    console.error("VALIDATION ERROR:", err.response?.data || err.message);
+
+    res.status(400).json({
+      success: false,
+      error: err.response?.data || err.message,
+    });
   }
 });
 
 // ===============================
-// 🔥 IMPORTANT: MOUNT ROUTER
+// 🔥 IMPORTANT FIX (NO DUPLICATION)
 // ===============================
-app.use("/api/hmrc", router);
+app.use("/", router);
 
 // ===============================
-// ✅ FINAL EXPORT
+// ✅ EXPORT FOR VERCEL
 // ===============================
 export default (req, res) => app(req, res);
