@@ -14,19 +14,26 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ✅ CREATE ROUTER (IMPORTANT)
+const router = express.Router();
+
 // ✅ Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ✅ ROOT
-app.get("/", (req, res) => {
+// ===============================
+// ✅ ROOT (FIXED)
+// ===============================
+router.get("/", (req, res) => {
   res.send("HMRC API Root Working ✅");
 });
 
+// ===============================
 // 🔐 CALLBACK
-app.get("/auth/hmrc/callback", async (req, res) => {
+// ===============================
+router.get("/auth/hmrc/callback", async (req, res) => {
   const { code, state } = req.query;
 
   if (!state) {
@@ -66,8 +73,10 @@ app.get("/auth/hmrc/callback", async (req, res) => {
   }
 });
 
+// ===============================
 // 🔄 REFRESH
-app.get("/refresh/:userId", async (req, res) => {
+// ===============================
+router.get("/refresh/:userId", async (req, res) => {
   const { userId } = req.params;
 
   const { data } = await supabase
@@ -109,8 +118,10 @@ app.get("/refresh/:userId", async (req, res) => {
   }
 });
 
+// ===============================
 // 🛡️ FRAUD CHECK
-app.get("/validate-headers", async (req, res) => {
+// ===============================
+router.get("/validate-headers", async (req, res) => {
   try {
     const response = await axios.post(
       `${process.env.HMRC_BASE_URL}/test/fraud-prevention-headers/validate`,
@@ -124,5 +135,12 @@ app.get("/validate-headers", async (req, res) => {
   }
 });
 
-// ✅ FINAL EXPORT (IMPORTANT)
+// ===============================
+// 🔥 IMPORTANT: MOUNT ROUTER
+// ===============================
+app.use("/api/hmrc", router);
+
+// ===============================
+// ✅ FINAL EXPORT
+// ===============================
 export default (req, res) => app(req, res);
