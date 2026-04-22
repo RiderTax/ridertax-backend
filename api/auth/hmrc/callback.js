@@ -59,25 +59,32 @@ export default async function handler(req, res) {
       SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // ⚠️ TEMP user_id (replace later with real auth user)
+    // ⚠️ TEMP user_id (replace later with real user)
     const user_id = "test-user";
 
-    // ✅ MATCHES YOUR TABLE STRUCTURE
-    const { error: dbError } = await supabase.from("hmrc_tokens").insert({
-      user_id,
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      token_type: tokens.token_type,
-      scope: tokens.scope || null,
-      expires_at: new Date(Date.now() + tokens.expires_in * 1000),
-    });
+    // ✅ UPSERT (handles insert + update)
+    const { error: dbError } = await supabase
+      .from("hmrc_tokens")
+      .upsert(
+        {
+          user_id,
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          token_type: tokens.token_type,
+          scope: tokens.scope || null,
+          expires_at: new Date(Date.now() + tokens.expires_in * 1000),
+        },
+        {
+          onConflict: "user_id",
+        }
+      );
 
     // ❗ Do NOT break flow if DB fails
     if (dbError) {
-      console.error("❌ Supabase insert error:", dbError);
+      console.error("❌ Supabase upsert error:", dbError);
     }
 
-    // ✅ SUCCESS
+    // ✅ SUCCESS → redirect to settings
     return res.redirect(
       "https://ridertax.co.uk/settings?hmrc=connected"
     );
