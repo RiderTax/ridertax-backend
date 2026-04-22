@@ -4,18 +4,10 @@ module.exports = async function handler(req, res) {
   try {
     console.log("🚀 STATUS API HIT");
 
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!SUPABASE_URL || !SUPABASE_KEY) {
-      return res.status(200).json({
-        connected: false,
-        connected_at: null,
-        debug: "missing env",
-      });
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
 
     const { user_id } = req.query;
 
@@ -33,12 +25,8 @@ module.exports = async function handler(req, res) {
       .eq("user_id", user_id)
       .maybeSingle();
 
-    if (error && error.code !== "PGRST116") {
-      return res.status(200).json({
-        connected: false,
-        connected_at: null,
-        debug: "db error",
-      });
+    if (error) {
+      console.error(error);
     }
 
     return res.status(200).json({
@@ -52,7 +40,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       connected: false,
       connected_at: null,
-      debug: "crash",
+      debug: err.message,
     });
   }
 };
