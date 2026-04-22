@@ -23,7 +23,6 @@ export default async function handler(req, res) {
       SUPABASE_SERVICE_ROLE_KEY,
     } = process.env;
 
-    // 🔴 Validate envs
     if (!HMRC_CLIENT_ID || !HMRC_CLIENT_SECRET || !HMRC_REDIRECT_URI) {
       throw new Error("Missing HMRC env variables");
     }
@@ -55,28 +54,30 @@ export default async function handler(req, res) {
 
     console.log("✅ Token received");
 
-    // 🔗 Supabase
     const supabase = createClient(
       SUPABASE_URL,
       SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // ⚠️ TEMP user_id (replace later with real user)
+    // ⚠️ TEMP user_id (replace later with real auth user)
     const user_id = "test-user";
 
-    // ✅ FIXED INSERT (matches your table)
+    // ✅ MATCHES YOUR TABLE STRUCTURE
     const { error: dbError } = await supabase.from("hmrc_tokens").insert({
       user_id,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
+      token_type: tokens.token_type,
+      scope: tokens.scope || null,
+      expires_at: new Date(Date.now() + tokens.expires_in * 1000),
     });
 
-    // 🚨 Do NOT break flow if DB fails
+    // ❗ Do NOT break flow if DB fails
     if (dbError) {
       console.error("❌ Supabase insert error:", dbError);
     }
 
-    // ✅ SUCCESS → redirect to settings
+    // ✅ SUCCESS
     return res.redirect(
       "https://ridertax.co.uk/settings?hmrc=connected"
     );
