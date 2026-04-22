@@ -1,4 +1,4 @@
-const { createClient } = require("@supabase/supabase-js");
+import { createClient } from "@supabase/supabase-js/dist/module/index.js";
 
 export default async function handler(req, res) {
 try {
@@ -8,10 +8,7 @@ console.log("🚀 STATUS API HIT");
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// ✅ Safety check (prevents crash)
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("❌ Missing Supabase env");
-
   return res.status(200).json({
     connected: false,
     connected_at: null,
@@ -22,8 +19,6 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const { user_id } = req.query;
-
-console.log("🔍 Checking user:", user_id);
 
 if (!user_id) {
   return res.status(200).json({
@@ -40,8 +35,6 @@ const { data, error } = await supabase
   .maybeSingle();
 
 if (error && error.code !== "PGRST116") {
-  console.error("❌ Supabase error:", error);
-
   return res.status(200).json({
     connected: false,
     connected_at: null,
