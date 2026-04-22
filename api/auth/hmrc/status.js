@@ -1,5 +1,4 @@
-import pkg from "@supabase/supabase-js";
-const { createClient } = pkg;
+const { createClient } = require("@supabase/supabase-js");
 
 export default async function handler(req, res) {
 try {
