@@ -1,75 +1,73 @@
+import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
 
 export default async function handler(req, res) {
-try {
-const { code, state } = req.query;
+  try {
+    const { code } = req.query;
 
-```
-console.log("HMRC callback received:", { code, state });
+    if (!code) {
+      return res.status(400).json({ error: "No code provided" });
+    }
 
-if (!code) {
-  return res.status(400).send("Missing code");
-}
+    const {
+      HMRC_CLIENT_ID,
+      HMRC_CLIENT_SECRET,
+      HMRC_REDIRECT_URI,
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY,
+    } = process.env;
 
-// ✅ ENV check
-const {
-  HMRC_CLIENT_ID,
-  HMRC_CLIENT_SECRET,
-  HMRC_REDIRECT_URI,
-  SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY,
-} = process.env;
+    // 🔴 Check envs
+    if (!HMRC_CLIENT_ID || !HMRC_CLIENT_SECRET || !HMRC_REDIRECT_URI) {
+      throw new Error("Missing HMRC env variables");
+    }
 
-if (!HMRC_CLIENT_ID || !HMRC_CLIENT_SECRET || !HMRC_REDIRECT_URI) {
-  console.error("Missing HMRC env");
-  return res.status(500).send("Server config error");
-}
+    // 🔁 Exchange code for token
+    const tokenResponse = await axios.post(
+      "https://api.service.hmrc.gov.uk/oauth/token",
+      new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: HMRC_CLIENT_ID,
+        client_secret: HMRC_CLIENT_SECRET,
+        redirect_uri: HMRC_REDIRECT_URI,
+        code,
+      }),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
 
-// ✅ Exchange code for token
-const tokenRes = await fetch("https://test-api.service.hmrc.gov.uk/oauth/token", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/x-www-form-urlencoded",
-  },
-  body: new URLSearchParams({
-    grant_type: "authorization_code",
-    client_id: HMRC_CLIENT_ID,
-    client_secret: HMRC_CLIENT_SECRET,
-    redirect_uri: HMRC_REDIRECT_URI,
-    code,
-  }),
-});
+    const tokens = tokenResponse.data;
 
-const tokenData = await tokenRes.json();
+    const supabase = createClient(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY
+    );
 
-console.log("HMRC token response:", tokenData);
+    // 🧠 TEMP user_id (you will replace later)
+    const user_id = "test";
 
-if (!tokenData.access_token) {
-  throw new Error("Failed to get token");
-}
+    await supabase.from("hmrc_tokens").insert({
+      user_id,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_type: tokens.token_type,
+      expires_at: new Date(Date.now() + tokens.expires_in * 1000),
+    });
 
-// ✅ Save to Supabase
-if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    return res.status(200).json({
+      success: true,
+      message: "HMRC connected",
+    });
 
-  await supabase.from("hmrc_tokens").upsert({
-    user_id: state || "unknown_user",
-    access_token: tokenData.access_token,
-    refresh_token: tokenData.refresh_token,
-    created_at: new Date().toISOString(),
-  });
-}
+  } catch (err) {
+    console.error("💥 CALLBACK ERROR:", err.response?.data || err.message);
 
-// ✅ Redirect back to app
-return res.redirect("https://rider-tax-flow.base44.app/settings?hmrc=success");
-```
-
-} catch (err) {
-console.error("💥 HMRC callback crash:", err);
-
-```
-return res.redirect("https://rider-tax-flow.base44.app/settings?hmrc=failed");
-```
-
-}
+    return res.status(500).json({
+      error: "callback_failed",
+      details: err.response?.data || err.message,
+    });
+  }
 }
