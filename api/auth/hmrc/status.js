@@ -1,4 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
+import pkg from "@supabase/supabase-js";
+const { createClient } = pkg;
 
 export default async function handler(req, res) {
 // ✅ CORS
