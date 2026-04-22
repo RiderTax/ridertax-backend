@@ -6,7 +6,9 @@ export default async function handler(req, res) {
     const { code } = req.query;
 
     if (!code) {
-      return res.status(400).json({ error: "No code provided" });
+      return res.redirect(
+        "https://ridertax.vercel.app/dashboard?hmrc=error"
+      );
     }
 
     const {
@@ -26,10 +28,9 @@ export default async function handler(req, res) {
       throw new Error("Missing Supabase env variables");
     }
 
-    console.log("🔑 Using HMRC CLIENT ID:", HMRC_CLIENT_ID);
     console.log("🔁 Exchanging code for token...");
 
-    // ✅ CORRECT SANDBOX TOKEN ENDPOINT
+    // ✅ SANDBOX TOKEN ENDPOINT
     const tokenResponse = await axios.post(
       "https://test-api.service.hmrc.gov.uk/oauth/token",
       new URLSearchParams({
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
       SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // 🧠 TEMP user_id (replace later with real auth user)
+    // 🧠 TEMP user_id (replace later with real logged-in user)
     const user_id = "test-user";
 
     // 💾 Store tokens
@@ -73,17 +74,17 @@ export default async function handler(req, res) {
       throw new Error("Failed to store tokens");
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "HMRC connected successfully",
-    });
+    // ✅ SUCCESS → redirect to dashboard
+    return res.redirect(
+      "https://ridertax.vercel.app/dashboard?hmrc=connected"
+    );
 
   } catch (err) {
     console.error("💥 CALLBACK ERROR:", err.response?.data || err.message);
 
-    return res.status(500).json({
-      error: "callback_failed",
-      details: err.response?.data || err.message,
-    });
+    // ❌ ERROR → redirect with failure
+    return res.redirect(
+      "https://ridertax.vercel.app/dashboard?hmrc=error"
+    );
   }
 }
