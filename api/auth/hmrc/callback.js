@@ -5,10 +5,10 @@ export default async function handler(req, res) {
   try {
     const { code } = req.query;
 
-    // ❌ No code → redirect with error
+    // ❌ If no code → redirect error
     if (!code) {
       return res.redirect(
-        "https://ridertax.vercel.app/settings?hmrc=error"
+        "https://ridertax.co.uk/settings?hmrc=error"
       );
     }
 
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
       SUPABASE_SERVICE_ROLE_KEY,
     } = process.env;
 
-    // 🔴 Validate env variables
+    // 🔴 Validate envs
     if (!HMRC_CLIENT_ID || !HMRC_CLIENT_SECRET || !HMRC_REDIRECT_URI) {
       throw new Error("Missing HMRC env variables");
     }
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
     console.log("🔁 Exchanging code for token...");
 
-    // ✅ HMRC SANDBOX TOKEN ENDPOINT
+    // ✅ HMRC SANDBOX TOKEN ENDPOINT (IMPORTANT)
     const tokenResponse = await axios.post(
       "https://test-api.service.hmrc.gov.uk/oauth/token",
       new URLSearchParams({
@@ -52,16 +52,16 @@ export default async function handler(req, res) {
 
     console.log("✅ Token received");
 
-    // 🔗 Supabase client
+    // 🔗 Supabase
     const supabase = createClient(
       SUPABASE_URL,
       SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // ⚠️ TEMP user_id (replace later with real logged-in user)
+    // ⚠️ TEMP user_id (replace later with logged-in user)
     const user_id = "test-user";
 
-    // 💾 Save tokens
+    // 💾 Store tokens
     const { error: dbError } = await supabase.from("hmrc_tokens").insert({
       user_id,
       access_token: tokens.access_token,
@@ -75,17 +75,17 @@ export default async function handler(req, res) {
       throw new Error("Database insert failed");
     }
 
-    // ✅ SUCCESS → redirect to SETTINGS page
+    // ✅ SUCCESS → redirect to YOUR settings page
     return res.redirect(
-      "https://ridertax.vercel.app/settings?hmrc=connected"
+      "https://ridertax.co.uk/settings?hmrc=connected"
     );
 
   } catch (err) {
     console.error("💥 CALLBACK ERROR:", err.response?.data || err.message);
 
-    // ❌ ERROR → redirect to SETTINGS page
+    // ❌ ERROR → redirect to settings
     return res.redirect(
-      "https://ridertax.vercel.app/settings?hmrc=error"
+      "https://ridertax.co.uk/settings?hmrc=error"
     );
   }
 }
