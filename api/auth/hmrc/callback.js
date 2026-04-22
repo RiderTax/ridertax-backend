@@ -17,14 +17,21 @@ export default async function handler(req, res) {
       SUPABASE_SERVICE_ROLE_KEY,
     } = process.env;
 
-    // 🔴 Check envs
+    // 🔴 Validate environment variables
     if (!HMRC_CLIENT_ID || !HMRC_CLIENT_SECRET || !HMRC_REDIRECT_URI) {
       throw new Error("Missing HMRC env variables");
     }
 
-    // 🔁 Exchange code for token
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Missing Supabase env variables");
+    }
+
+    console.log("🔑 Using HMRC CLIENT ID:", HMRC_CLIENT_ID);
+    console.log("🔁 Exchanging code for token...");
+
+    // ✅ CORRECT SANDBOX TOKEN ENDPOINT
     const tokenResponse = await axios.post(
-      "https://api.service.hmrc.gov.uk/oauth/token",
+      "https://test-api.service.hmrc.gov.uk/oauth/token",
       new URLSearchParams({
         grant_type: "authorization_code",
         client_id: HMRC_CLIENT_ID,
@@ -41,15 +48,19 @@ export default async function handler(req, res) {
 
     const tokens = tokenResponse.data;
 
+    console.log("✅ Token received");
+
+    // 🔗 Connect to Supabase
     const supabase = createClient(
       SUPABASE_URL,
       SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // 🧠 TEMP user_id (you will replace later)
-    const user_id = "test";
+    // 🧠 TEMP user_id (replace later with real auth user)
+    const user_id = "test-user";
 
-    await supabase.from("hmrc_tokens").insert({
+    // 💾 Store tokens
+    const { error: dbError } = await supabase.from("hmrc_tokens").insert({
       user_id,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
@@ -57,9 +68,14 @@ export default async function handler(req, res) {
       expires_at: new Date(Date.now() + tokens.expires_in * 1000),
     });
 
+    if (dbError) {
+      console.error("❌ Supabase insert error:", dbError);
+      throw new Error("Failed to store tokens");
+    }
+
     return res.status(200).json({
       success: true,
-      message: "HMRC connected",
+      message: "HMRC connected successfully",
     });
 
   } catch (err) {
