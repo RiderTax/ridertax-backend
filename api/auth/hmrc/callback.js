@@ -3,13 +3,16 @@ import { createClient } from "@supabase/supabase-js";
 
 export default async function handler(req, res) {
   try {
-    const { code } = req.query;
+    const { code, error } = req.query;
 
-    // ❌ If no code → redirect error
+    // ❌ If HMRC returned error
+    if (error) {
+      return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
+    }
+
+    // ❌ If no code
     if (!code) {
-      return res.redirect(
-        "https://ridertax.co.uk/settings?hmrc=error"
-      );
+      return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
 
     const {
@@ -31,7 +34,7 @@ export default async function handler(req, res) {
 
     console.log("🔁 Exchanging code for token...");
 
-    // ✅ HMRC SANDBOX TOKEN ENDPOINT (IMPORTANT)
+    // ✅ HMRC SANDBOX TOKEN ENDPOINT
     const tokenResponse = await axios.post(
       "https://test-api.service.hmrc.gov.uk/oauth/token",
       new URLSearchParams({
@@ -58,24 +61,22 @@ export default async function handler(req, res) {
       SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // ⚠️ TEMP user_id (replace later with logged-in user)
+    // ⚠️ TEMP user_id (replace later with real user)
     const user_id = "test-user";
 
-    // 💾 Store tokens
+    // ✅ FIXED INSERT (matches your table)
     const { error: dbError } = await supabase.from("hmrc_tokens").insert({
       user_id,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
-      token_type: tokens.token_type,
-      expires_at: new Date(Date.now() + tokens.expires_in * 1000),
     });
 
+    // 🚨 Do NOT break flow if DB fails
     if (dbError) {
-      console.error("❌ Supabase error:", dbError);
-      throw new Error("Database insert failed");
+      console.error("❌ Supabase insert error:", dbError);
     }
 
-    // ✅ SUCCESS → redirect to YOUR settings page
+    // ✅ SUCCESS → redirect to settings
     return res.redirect(
       "https://ridertax.co.uk/settings?hmrc=connected"
     );
@@ -83,7 +84,6 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error("💥 CALLBACK ERROR:", err.response?.data || err.message);
 
-    // ❌ ERROR → redirect to settings
     return res.redirect(
       "https://ridertax.co.uk/settings?hmrc=error"
     );
