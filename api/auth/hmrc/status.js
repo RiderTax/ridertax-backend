@@ -1,63 +1,77 @@
-import { createClient } from "@supabase/supabase-js/dist/module/index.js";
+const { createClient } = require("@supabase/supabase-js");
 
-export default async function handler(req, res) {
-try {
-console.log("🚀 STATUS API HIT");
+module.exports = async function handler(req, res) {
+  // ✅ CORS (safe)
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "*");
 
-```
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  return res.status(200).json({
-    connected: false,
-    connected_at: null,
-    debug: "missing env",
-  });
-}
+  try {
+    console.log("🚀 STATUS API HIT");
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const { user_id } = req.query;
+    // ✅ Env check
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      console.error("❌ Missing env vars");
+      return res.status(200).json({
+        connected: false,
+        connected_at: null,
+        debug: "missing env",
+      });
+    }
 
-if (!user_id) {
-  return res.status(200).json({
-    connected: false,
-    connected_at: null,
-    debug: "no user_id",
-  });
-}
+    // ✅ Init client
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const { data, error } = await supabase
-  .from("hmrc_tokens")
-  .select("created_at")
-  .eq("user_id", user_id)
-  .maybeSingle();
+    const { user_id } = req.query;
 
-if (error && error.code !== "PGRST116") {
-  return res.status(200).json({
-    connected: false,
-    connected_at: null,
-    debug: "db error",
-  });
-}
+    // ✅ Input check
+    if (!user_id) {
+      return res.status(200).json({
+        connected: false,
+        connected_at: null,
+        debug: "no user_id",
+      });
+    }
 
-return res.status(200).json({
-  connected: !!data,
-  connected_at: data?.created_at || null,
-});
-```
+    console.log("🔍 Checking user:", user_id);
 
-} catch (err) {
-console.error("💥 STATUS CRASH:", err);
+    // ✅ Query DB
+    const { data, error } = await supabase
+      .from("hmrc_tokens")
+      .select("created_at")
+      .eq("user_id", user_id)
+      .maybeSingle();
 
-```
-return res.status(200).json({
-  connected: false,
-  connected_at: null,
-  debug: "crash",
-});
-```
+    // ✅ Handle DB error (ignore no rows)
+    if (error && error.code !== "PGRST116") {
+      console.error("❌ DB error:", error);
+      return res.status(200).json({
+        connected: false,
+        connected_at: null,
+        debug: "db error",
+      });
+    }
 
-}
-}
+    console.log("✅ Result:", data);
+
+    return res.status(200).json({
+      connected: !!data,
+      connected_at: data?.created_at || null,
+    });
+  } catch (err) {
+    console.error("💥 STATUS CRASH:", err);
+
+    return res.status(200).json({
+      connected: false,
+      connected_at: null,
+      debug: "crash",
+    });
+  }
+};
