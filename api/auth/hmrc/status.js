@@ -1,24 +1,24 @@
 import { createClient } from "@supabase/supabase-js";
 
 export default async function handler(req, res) {
-// ✅ CORS headers
+// ✅ CORS
 res.setHeader("Access-Control-Allow-Origin", "*");
 res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
 res.setHeader("Access-Control-Allow-Headers", "*");
 
-// ✅ Handle preflight once (clean)
 if (req.method === "OPTIONS") {
 return res.status(200).end();
 }
 
 try {
-// 🔥 Validate environment variables FIRST (prevents crash)
+// ✅ Use correct env names (THIS WAS YOUR BUG)
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SERVICE_ROLE_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 ```
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("❌ Missing Supabase environment variables");
+// ✅ Prevent empty string / undefined crash
+if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_URL === "" || SUPABASE_KEY === "") {
+  console.error("❌ Supabase env missing or empty");
 
   return res.status(200).json({
     connected: false,
@@ -26,12 +26,12 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   });
 }
 
-// ✅ Create client safely inside handler
+// ✅ Safe client init
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const { user_id } = req.query;
 
-console.log("🔍 Checking HMRC status for user:", user_id);
+console.log("🔍 HMRC status check:", user_id);
 
 // ✅ Validate input
 if (!user_id || user_id === "YOUR_USER_ID") {
@@ -48,9 +48,9 @@ const { data, error } = await supabase
   .eq("user_id", user_id)
   .maybeSingle();
 
-// ✅ Handle real errors (ignore "no rows")
+// ✅ Handle DB errors (ignore "no rows")
 if (error && error.code !== "PGRST116") {
-  console.error("❌ Supabase error:", error);
+  console.error("❌ Supabase query error:", error);
 
   return res.status(200).json({
     connected: false,
@@ -67,10 +67,9 @@ return res.status(200).json({
 ```
 
 } catch (err) {
-console.error("💥 Server crash:", err);
+console.error("💥 Status API crash:", err);
 
 ```
-// ✅ Never break frontend
 return res.status(200).json({
   connected: false,
   connected_at: null,
