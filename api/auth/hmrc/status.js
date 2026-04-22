@@ -1,67 +1,77 @@
-import { createClient } from "@supabase/supabase-js";
+const { createClient } = require("@supabase/supabase-js");
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SERVICE_ROLE_KEY
-);
+module.exports = async function handler(req, res) {
+  // ✅ CORS (safe)
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "*");
 
-export default async function handler(req, res) {
- // ✅ CORS (allow everything for now)
-res.setHeader("Access-Control-Allow-Origin", "*");
-res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-res.setHeader("Access-Control-Allow-Headers", "*");
-
-if (req.method === "OPTIONS") {
-  return res.status(200).end();
-}
-
-  // ✅ Handle preflight request
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
   try {
-    const { user_id } = req.query;
+    console.log("🚀 STATUS API HIT");
 
-    console.log("Checking HMRC status for user:", user_id);
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // ✅ Validate input
-    if (!user_id || user_id === "YOUR_USER_ID") {
+    // ✅ Env check
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      console.error("❌ Missing env vars");
       return res.status(200).json({
         connected: false,
         connected_at: null,
+        debug: "missing env",
       });
     }
 
+    // ✅ Init client
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const { user_id } = req.query;
+
+    // ✅ Input check
+    if (!user_id) {
+      return res.status(200).json({
+        connected: false,
+        connected_at: null,
+        debug: "no user_id",
+      });
+    }
+
+    console.log("🔍 Checking user:", user_id);
+
+    // ✅ Query DB
     const { data, error } = await supabase
       .from("hmrc_tokens")
       .select("created_at")
       .eq("user_id", user_id)
       .maybeSingle();
 
-    // ✅ Ignore "no rows found"
+    // ✅ Handle DB error (ignore no rows)
     if (error && error.code !== "PGRST116") {
-      console.error("Supabase error:", error);
+      console.error("❌ DB error:", error);
       return res.status(200).json({
         connected: false,
         connected_at: null,
+        debug: "db error",
       });
     }
 
-    console.log("HMRC status result:", data);
+    console.log("✅ Result:", data);
 
     return res.status(200).json({
       connected: !!data,
       connected_at: data?.created_at || null,
     });
-
   } catch (err) {
-    console.error("Server crash:", err);
+    console.error("💥 STATUS CRASH:", err);
 
-    // ✅ Never break frontend
     return res.status(200).json({
       connected: false,
       connected_at: null,
+      debug: "crash",
     });
   }
-}
+};
