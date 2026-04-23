@@ -37,8 +37,9 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ FINAL FIX (DO NOT CHANGE THIS AGAIN)
-    "Gov-Client-Screens": "width=1&height=1&colourDepth=1&scalingFactor=1",
+    // ✅ FINAL CORRECT VALUES
+    "Gov-Client-Screens":
+      "width=1920&height=1080&colourDepth=24&scalingFactor=1.0",
 
     "Gov-Client-Window-Size": "width=1200&height=800",
 
