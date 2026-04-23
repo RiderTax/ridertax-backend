@@ -37,9 +37,9 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ FINAL CORRECT HEADER (HMRC SPEC)
+    // ✅ FINAL FIX
     "Gov-Client-Screens":
-      "width=1920&height=1080&colour-depth=24&device-pixel-ratio=1",
+      "width=1920&height=1080&colour-depth=24&scaling-factor=1",
 
     "Gov-Client-Window-Size": "width=1200&height=800",
 
