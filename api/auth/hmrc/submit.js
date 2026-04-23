@@ -1,23 +1,18 @@
 import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
+import { buildFraudHeaders } from "../../utils/hmrcFraudHeaders";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SERVICE_ROLE_KEY
 );
 
-// 🔐 Helper: generate device ID
-function generateDeviceId(user_id) {
-  return crypto.createHash("sha256").update(user_id).digest("hex");
-}
-
 export default async function handler(req, res) {
   try {
     const { user_id, income, expenses, period_start, period_end } = req.body;
 
     // ✅ Validate input
-    if (!user_id || !income || !expenses) {
+    if (!user_id || income == null || expenses == null) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -36,7 +31,7 @@ export default async function handler(req, res) {
 
     let accessToken = tokenData.access_token;
 
-    // 🔁 OPTIONAL: refresh token before submission
+    // 🔁 Refresh token (SAFE)
     try {
       const refresh = await axios.post(
         "https://test-api.service.hmrc.gov.uk/oauth/token",
@@ -60,10 +55,10 @@ export default async function handler(req, res) {
         .eq("user_id", user_id);
 
     } catch (err) {
-      console.warn("Token refresh failed, using existing token");
+      console.warn("⚠️ Token refresh failed, using existing token");
     }
 
-    // 📦 HMRC payload (example structure)
+    // 📦 HMRC payload (example — will refine later)
     const payload = {
       fromDate: period_start,
       toDate: period_end,
@@ -77,30 +72,21 @@ export default async function handler(req, res) {
       }
     };
 
-    // 🧾 Fraud prevention headers
-    const deviceId = generateDeviceId(user_id);
-
+    // ✅ PROPER FRAUD HEADERS (CENTRALISED)
     const headers = {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-
-      // 🔐 HMRC REQUIRED HEADERS
-      "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
-      "Gov-Client-Device-ID": deviceId,
-      "Gov-Client-User-IDs": `user_id=${user_id}`,
-      "Gov-Client-Timezone": "Europe/London",
-      "Gov-Client-User-Agent": "RiderTax/1.0",
-      "Gov-Vendor-Version": "ridertax=1.0.0"
+      ...buildFraudHeaders(req, user_id),
     };
 
-    // 🚀 Submit to HMRC (sandbox for now)
+    // 🚀 HMRC API CALL (sandbox)
     const response = await axios.post(
       "https://test-api.service.hmrc.gov.uk/individuals/self-assessment/periodic-summary",
       payload,
       { headers }
     );
 
-    // 💾 Store audit trail
+    // 💾 Store success
     await supabase.from("hmrc_submissions").insert({
       user_id,
       period_start,
@@ -118,16 +104,18 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error("HMRC submission error:", err.response?.data || err.message);
+    console.error("❌ HMRC submission error:", err.response?.data || err.message);
 
-    // 💾 Store failed attempt
-    await supabase.from("hmrc_submissions").insert({
-      user_id: req.body?.user_id,
-      income: req.body?.income,
-      expenses: req.body?.expenses,
-      status: "failed",
-      hmrc_response: err.response?.data || err.message
-    });
+    // 💾 Store failure
+    try {
+      await supabase.from("hmrc_submissions").insert({
+        user_id: req.body?.user_id,
+        income: req.body?.income,
+        expenses: req.body?.expenses,
+        status: "failed",
+        hmrc_response: err.response?.data || err.message
+      });
+    } catch {}
 
     return res.status(500).json({
       error: "HMRC submission failed",
