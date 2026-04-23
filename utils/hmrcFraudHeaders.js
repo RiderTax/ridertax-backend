@@ -19,8 +19,6 @@ function getPublicIP(req) {
 export function buildFraudHeaders(req, user_id) {
   const deviceId = generateDeviceId();
   const publicIP = getPublicIP(req);
-
-  // MUST include milliseconds (ISO format)
   const timestamp = new Date().toISOString();
 
   return {
@@ -39,7 +37,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ REQUIRED (PLAIN, NOT ENCODED)
+    // ✅ KEEP SIMPLE + EXACT
     "Gov-Client-Screens":
       "width=1920&height=1080&colourDepth=24&scalingFactor=1",
 
@@ -50,16 +48,14 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ CRITICAL: ENCODE ENTIRE STRING
-    "Gov-Client-Multi-Factor": encodeURIComponent(
-      `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`
-    ),
+    // ✅ FINAL CORRECT STRUCTURE (COMMA SEPARATED)
+    "Gov-Client-Multi-Factor":
+      `type=OTHER,timestamp=${timestamp},uniqueReference=${deviceId}`,
 
     "Gov-Client-Local-IPs-Timestamp": timestamp,
 
     "Gov-Vendor-Version": "RiderTax=1.0.0",
 
-    // MUST be hashed
     "Gov-Vendor-License-IDs": `licenseId=${hash("RiderTax")}`,
 
     "Gov-Vendor-Product-Name": "RiderTax",
