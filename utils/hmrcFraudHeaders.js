@@ -21,9 +21,6 @@ export function buildFraudHeaders(req, user_id) {
   const publicIP = getPublicIP(req);
   const timestamp = new Date().toISOString();
 
-  // ✅ RAW STRING
-  const mfaRaw = `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`;
-
   return {
     "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
 
@@ -40,7 +37,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ EXACT FORMAT (NO ENCODING)
+    // ✅ HMRC ACCEPTED FORMAT (SCREEN LIST)
     "Gov-Client-Screens":
       "width=1920&height=1080&colourDepth=24&scalingFactor=1",
 
@@ -51,8 +48,9 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ THIS IS THE CORRECT LINE
-    "Gov-Client-Multi-Factor": encodeURIComponent(mfaRaw),
+    // ✅ FINAL CORRECT FORMAT (PLAIN, NOT ENCODED)
+    "Gov-Client-Multi-Factor":
+      `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`,
 
     "Gov-Client-Local-IPs-Timestamp": timestamp,
 
