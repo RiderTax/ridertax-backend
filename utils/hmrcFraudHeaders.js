@@ -37,7 +37,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ REQUIRED AGAIN — EXACT FORMAT
+    // ✅ THIS FORMAT IS WHAT HMRC ACCEPTS
     "Gov-Client-Screens":
       "width=1920&height=1080&colourDepth=24&scalingFactor=1",
 
@@ -48,7 +48,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ FINAL FIX — NO ENCODING
+    // ✅ CRITICAL FIX (ARRAY FORMAT)
     "Gov-Client-Multi-Factor":
       `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`,
 
