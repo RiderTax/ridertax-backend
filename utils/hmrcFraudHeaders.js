@@ -19,7 +19,9 @@ function getPublicIP(req) {
 export function buildFraudHeaders(req, user_id) {
   const deviceId = generateDeviceId();
   const publicIP = getPublicIP(req);
-  const timestamp = new Date().toISOString();
+
+  // ⚠️ MUST be ISO without milliseconds
+  const timestamp = new Date().toISOString().split(".")[0] + "Z";
 
   return {
     "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -37,7 +39,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ EXACT HMRC FORMAT (NO decimals, NO variations)
+    // ✅ EXACT FORMAT HMRC ACCEPTS
     "Gov-Client-Screens":
       "width=1920&height=1080&colourDepth=24&scalingFactor=1",
 
@@ -48,8 +50,9 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ SIMPLIFIED (THIS FIXES YOUR ERROR)
-    "Gov-Client-Multi-Factor": `type=OTHER`,
+    // ✅ STRICT FORMAT (THIS FIXES YOUR ERROR)
+    "Gov-Client-Multi-Factor":
+      `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`,
 
     "Gov-Client-Local-IPs-Timestamp": timestamp,
 
