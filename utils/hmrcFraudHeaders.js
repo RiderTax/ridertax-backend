@@ -16,10 +16,21 @@ function getPublicIP(req) {
   );
 }
 
+// helper to encode key-value string
+function encodeKV(str) {
+  return str
+    .split("&")
+    .map(pair => {
+      const [k, v] = pair.split("=");
+      return `${encodeURIComponent(k)}=${encodeURIComponent(v)}`;
+    })
+    .join("&");
+}
+
 export function buildFraudHeaders(req, user_id) {
   const deviceId = generateDeviceId();
   const publicIP = getPublicIP(req);
-  const timestamp = new Date().toISOString(); // MUST include milliseconds
+  const timestamp = new Date().toISOString();
 
   return {
     "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -37,9 +48,10 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ THIS FORMAT IS WHAT HMRC ACCEPTS
-    "Gov-Client-Screens":
-      "width=1920&height=1080&colourDepth=24&scalingFactor=1",
+    // ✅ FULL + ENCODED
+    "Gov-Client-Screens": encodeKV(
+      "width=1920&height=1080&colourDepth=24&scalingFactor=1"
+    ),
 
     "Gov-Client-Window-Size": "width=1200&height=800",
 
@@ -48,9 +60,10 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ CRITICAL FIX (ARRAY FORMAT)
-    "Gov-Client-Multi-Factor":
-      `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`,
+    // ✅ FULL + ENCODED (THIS FIXES YOUR ERROR)
+    "Gov-Client-Multi-Factor": encodeKV(
+      `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`
+    ),
 
     "Gov-Client-Local-IPs-Timestamp": timestamp,
 
