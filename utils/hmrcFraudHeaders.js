@@ -19,6 +19,8 @@ function getPublicIP(req) {
 export function buildFraudHeaders(req, user_id) {
   const deviceId = generateDeviceId();
   const publicIP = getPublicIP(req);
+
+  // MUST include milliseconds
   const timestamp = new Date().toISOString();
 
   return {
@@ -37,7 +39,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ HMRC ACCEPTED FORMAT (SCREEN LIST)
+    // ✅ EXACT REQUIRED FORMAT
     "Gov-Client-Screens":
       "width=1920&height=1080&colourDepth=24&scalingFactor=1",
 
@@ -48,7 +50,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ FINAL CORRECT FORMAT (PLAIN, NOT ENCODED)
+    // ✅ THIS IS THE KEY FIX
     "Gov-Client-Multi-Factor":
       `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`,
 
