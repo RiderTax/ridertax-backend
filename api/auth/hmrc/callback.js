@@ -1,16 +1,16 @@
 import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
+import jwt from "jsonwebtoken"; // for decoding Supabase auth
 
 export default async function handler(req, res) {
   try {
-    const { code, error } = req.query;
+    const { code, error, state } = req.query;
 
     // ❌ If HMRC returned error
     if (error) {
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
 
-    // ❌ If no code
     if (!code) {
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
@@ -31,9 +31,29 @@ export default async function handler(req, res) {
       throw new Error("Missing Supabase env variables");
     }
 
+    // 🔐 Get user from state (IMPORTANT)
+    if (!state) {
+      throw new Error("Missing state (user session)");
+    }
+
+    // You should pass Supabase JWT in state during login
+    let user_id;
+
+    try {
+      const decoded = jwt.decode(state);
+      user_id = decoded?.sub;
+    } catch (e) {
+      throw new Error("Invalid state token");
+    }
+
+    if (!user_id) {
+      throw new Error("User not identified");
+    }
+
+    console.log("👤 User ID:", user_id);
     console.log("🔁 Exchanging code for token...");
 
-    // ✅ HMRC SANDBOX TOKEN ENDPOINT
+    // ✅ Exchange code for token
     const tokenResponse = await axios.post(
       "https://test-api.service.hmrc.gov.uk/oauth/token",
       new URLSearchParams({
@@ -59,11 +79,8 @@ export default async function handler(req, res) {
       SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // ⚠️ TEMP user_id (replace later with real user)
-    const user_id = "test-user";
-
-    // ✅ UPSERT (handles insert + update)
-    const { error: dbError } = await supabase
+    // ✅ Save tokens
+    const { error: tokenError } = await supabase
       .from("hmrc_tokens")
       .upsert(
         {
@@ -74,17 +91,24 @@ export default async function handler(req, res) {
           scope: tokens.scope || null,
           expires_at: new Date(Date.now() + tokens.expires_in * 1000),
         },
-        {
-          onConflict: "user_id",
-        }
+        { onConflict: "user_id" }
       );
 
-    // ❗ Do NOT break flow if DB fails
-    if (dbError) {
-      console.error("❌ Supabase upsert error:", dbError);
+    if (tokenError) {
+      console.error("❌ Token save error:", tokenError);
     }
 
-    // ✅ SUCCESS → redirect to settings
+    // ✅ UPDATE USER STATUS (THIS WAS MISSING 🔥)
+    const { error: userError } = await supabase
+      .from("users")
+      .update({ hmrc_connected: true })
+      .eq("id", user_id);
+
+    if (userError) {
+      console.error("❌ User update error:", userError);
+    }
+
+    // ✅ SUCCESS REDIRECT
     return res.redirect(
       "https://ridertax.co.uk/settings?hmrc=connected"
     );
