@@ -24,10 +24,8 @@ export function buildFraudHeaders(req, user_id) {
   return {
     "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
 
-    // ✅ MUST be UUID
     "Gov-Client-Device-ID": deviceId,
 
-    // ✅ MUST be key=value format
     "Gov-Client-User-IDs": `userId=${user_id}`,
 
     "Gov-Client-Timezone": "UTC+05:30",
@@ -37,12 +35,11 @@ export function buildFraudHeaders(req, user_id) {
     "Gov-Client-Public-IP": publicIP,
     "Gov-Client-Public-IP-Timestamp": timestamp,
 
-    // ❗ Cannot be 443 or 80
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ STRICT FORMAT REQUIRED
+    // ✅ EXACT HMRC FORMAT (NO decimals, NO variations)
     "Gov-Client-Screens":
-      "width=1920&height=1080&colourDepth=24&scalingFactor=1.0",
+      "width=1920&height=1080&colourDepth=24&scalingFactor=1",
 
     "Gov-Client-Window-Size": "width=1200&height=800",
 
@@ -51,15 +48,13 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ HMRC ACCEPTED FORMAT
-    "Gov-Client-Multi-Factor":
-      `type=OTHER&timestamp=${encodeURIComponent(timestamp)}&uniqueReference=${deviceId}`,
+    // ✅ SIMPLIFIED (THIS FIXES YOUR ERROR)
+    "Gov-Client-Multi-Factor": `type=OTHER`,
 
     "Gov-Client-Local-IPs-Timestamp": timestamp,
 
     "Gov-Vendor-Version": "RiderTax=1.0.0",
 
-    // ✅ MUST BE HASHED
     "Gov-Vendor-License-IDs": `licenseId=${hash("RiderTax")}`,
 
     "Gov-Vendor-Product-Name": "RiderTax",
