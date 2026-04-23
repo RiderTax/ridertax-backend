@@ -21,49 +21,38 @@ export function buildFraudHeaders(req, user_id) {
   const publicIP = getPublicIP(req);
   const timestamp = new Date().toISOString();
 
-  // ✅ RAW MFA STRING
-  const mfaRaw = `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`;
+  // ✅ ONE MFA method (can add more later separated by comma)
+  const mfa = `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`;
 
   return {
     "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
-
     "Gov-Client-Device-ID": deviceId,
-
     "Gov-Client-User-IDs": `userId=${user_id}`,
-
     "Gov-Client-Timezone": "UTC+05:30",
-
     "Gov-Client-Local-IPs": "127.0.0.1",
 
     "Gov-Client-Public-IP": publicIP,
     "Gov-Client-Public-IP-Timestamp": timestamp,
-
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ CRITICAL FIX (PIPE FORMAT)
+    // ✅ Correct screen format (single screen)
     "Gov-Client-Screens":
       "width=1920&height=1080&colourDepth=24&scalingFactor=1",
 
     "Gov-Client-Window-Size": "width=1200&height=800",
-
     "Gov-Client-Browser-JS-User-Agent":
       req.headers["user-agent"] || "Mozilla/5.0",
-
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ FINAL CORRECT MFA (ENCODE WHOLE STRING)
-    "Gov-Client-Multi-Factor": encodeURIComponent(mfaRaw),
+    // ✅ CRITICAL: encode entire MFA string ONCE
+    "Gov-Client-Multi-Factor": encodeURIComponent(mfa),
 
     "Gov-Client-Local-IPs-Timestamp": timestamp,
 
     "Gov-Vendor-Version": "RiderTax=1.0.0",
-
     "Gov-Vendor-License-IDs": `licenseId=${hash("RiderTax")}`,
-
     "Gov-Vendor-Product-Name": "RiderTax",
-
     "Gov-Vendor-Public-IP": publicIP,
-
     "Gov-Vendor-Forwarded": `by=${publicIP}&for=${publicIP}`,
   };
 }
