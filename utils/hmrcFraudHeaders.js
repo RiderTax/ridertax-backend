@@ -21,14 +21,8 @@ export function buildFraudHeaders(req, user_id) {
   const publicIP = getPublicIP(req);
   const timestamp = new Date().toISOString();
 
-  // ✅ HMRC EXPECTS ARRAY STRUCTURE
-  const multiFactor = JSON.stringify([
-    {
-      type: "OTHER",
-      timestamp: timestamp,
-      uniqueReference: deviceId,
-    },
-  ]);
+  // ✅ RAW STRING
+  const mfaRaw = `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`;
 
   return {
     "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -46,7 +40,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ REQUIRED
+    // ✅ EXACT FORMAT (NO ENCODING)
     "Gov-Client-Screens":
       "width=1920&height=1080&colourDepth=24&scalingFactor=1",
 
@@ -57,8 +51,8 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ FINAL CORRECT FORMAT
-    "Gov-Client-Multi-Factor": multiFactor,
+    // ✅ THIS IS THE CORRECT LINE
+    "Gov-Client-Multi-Factor": encodeURIComponent(mfaRaw),
 
     "Gov-Client-Local-IPs-Timestamp": timestamp,
 
