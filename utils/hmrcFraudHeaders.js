@@ -20,7 +20,6 @@ export function buildFraudHeaders(req, user_id) {
   const deviceId = generateDeviceId();
   const publicIP = getPublicIP(req);
 
-  // MUST include milliseconds
   const timestamp = new Date().toISOString();
 
   return {
@@ -39,7 +38,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ EXACT FORMAT (DO NOT CHANGE)
+    // ✅ FIXED (LIST STRUCTURE)
     "Gov-Client-Screens":
       "width=1920&height=1080&colourDepth=24&scalingFactor=1",
 
@@ -50,9 +49,9 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ CRITICAL — NO ENCODING
+    // ✅ FIXED (ENCODE VALUES ONLY)
     "Gov-Client-Multi-Factor":
-      `type=OTHER&timestamp=${timestamp}&uniqueReference=${deviceId}`,
+      `type=OTHER&timestamp=${encodeURIComponent(timestamp)}&uniqueReference=${encodeURIComponent(deviceId)}`,
 
     "Gov-Client-Local-IPs-Timestamp": timestamp,
 
