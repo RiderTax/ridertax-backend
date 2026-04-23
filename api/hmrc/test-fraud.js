@@ -1,55 +1,45 @@
 import axios from "axios";
-import { createClient } from "@supabase/supabase-js";
 import { buildFraudHeaders } from "../../utils/hmrcFraudHeaders";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 export default async function handler(req, res) {
   try {
     const { user_id } = req.query;
 
-    if (!user_id) {
-      return res.status(400).json({ error: "Missing user_id" });
-    }
+    // 🔐 STEP 1: Get access token
+    const tokenRes = await axios.post(
+      "https://test-api.service.hmrc.gov.uk/oauth/token",
+      new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: process.env.HMRC_CLIENT_ID,
+        client_secret: process.env.HMRC_CLIENT_SECRET,
+        scope: "read:fraud-prevention-data"
+      }),
+      {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+      }
+    );
 
-    // ✅ Get token from DB
-    const { data } = await supabase
-      .from("hmrc_tokens")
-      .select("*")
-      .eq("user_id", user_id)
-      .maybeSingle();
+    const accessToken = tokenRes.data.access_token;
 
-    if (!data) {
-      return res.status(400).json({
-        error: "User not connected to HMRC",
-        user_id
-      });
-    }
-
-    const access_token = data.access_token;
-
-    // ✅ Build headers
+    // 🔐 STEP 2: Build headers
     const headers = {
-      Authorization: `Bearer ${access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       ...buildFraudHeaders(req, user_id),
     };
 
-    // ✅ HMRC validation endpoint
+    // 🚀 STEP 3: Call HMRC validator
     const response = await axios.get(
       "https://test-api.service.hmrc.gov.uk/test/fraud-prevention-headers/validate",
       { headers }
     );
 
-    return res.status(200).json(response.data);
+    return res.json(response.data);
 
   } catch (err) {
-    console.error("❌ Fraud test error:", err.response?.data || err.message);
+    console.error(err.response?.data || err.message);
 
     return res.status(500).json({
-      error: err.response?.data || err.message,
+      error: err.response?.data || err.message
     });
   }
 }
