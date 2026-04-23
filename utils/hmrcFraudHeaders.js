@@ -37,9 +37,8 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ ADD BACK (MINIMAL SAFE VERSION)
-    "Gov-Client-Screens":
-      "width=1&height=1&colourDepth=1&scalingFactor=1",
+    // ❌ KEEP REMOVED — DO NOT ADD AGAIN
+    // "Gov-Client-Screens": ...
 
     "Gov-Client-Window-Size": "width=1200&height=800",
 
@@ -48,7 +47,7 @@ export function buildFraudHeaders(req, user_id) {
 
     "Gov-Client-Browser-Do-Not-Track": "false",
 
-    // ✅ FIX KEY NAME ONLY
+    // ✅ THIS IS NOW CORRECT — DO NOT CHANGE
     "Gov-Client-Multi-Factor":
       `type=OTHER&timestamp=${encodeURIComponent(timestamp)}&unique-reference=${encodeURIComponent(deviceId)}`,
 
