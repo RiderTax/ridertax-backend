@@ -32,11 +32,12 @@ export function buildFraudHeaders(req, user_id) {
     "Gov-Client-Public-IP-Timestamp": timestamp,
     "Gov-Client-Public-Port": "12345",
 
-    // ✅ ONLY CHANGE HERE (24 → 32)
+    // ✅ ONLY CHANGE HERE (FINAL STRUCTURE)
     "Gov-Client-Screens":
-      "width=1920&height=1080&colourDepth=32&scalingFactor=1",
+      "width=1920,height=1080,colourDepth=24,scalingFactor=1",
 
     "Gov-Client-Window-Size": "width=1200&height=800",
+
     "Gov-Client-Browser-JS-User-Agent":
       req.headers["user-agent"] || "Mozilla/5.0",
     "Gov-Client-Browser-Do-Not-Track": "false",
