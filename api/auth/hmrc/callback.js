@@ -26,8 +26,10 @@ export default async function handler(req, res) {
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
 
-    // ✅ THIS IS YOUR REAL USER ID
-    const user_id = state.trim();
+    // =========================
+    // ✅ STABLE USER (FIXED MODE)
+    // =========================
+    const user_id = "test-user";
 
     console.log("✅ Using user_id:", user_id);
 
