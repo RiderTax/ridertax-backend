@@ -16,14 +16,17 @@ const HMRC_BASE =
 // 🚀 HANDLER
 // =========================
 export default async function handler(req, res) {
+  // =========================
   // CORS
+  // =========================
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST")
+  if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
 
   try {
     // =========================
@@ -32,7 +35,7 @@ export default async function handler(req, res) {
     const body =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    const { user_id, nino, utr, income, expenses } = body || {};
+    const { user_id, nino } = body || {};
 
     console.log("Incoming body:", body);
 
@@ -111,11 +114,11 @@ export default async function handler(req, res) {
     const fraudHeaders = buildFraudHeaders(req, user_id);
 
     // =========================
-    // 5️⃣ TEST HMRC API CALL
+    // 5️⃣ SAFE TEST ENDPOINT (FIXED)
     // =========================
-    const url = `${HMRC_BASE}/individuals/self-assessment/obligations?from=2024-04-06&to=2025-04-05`;
+    const url = `${HMRC_BASE}/individuals/details`;
 
-    console.log("Calling HMRC with token:", accessToken?.slice(0, 10));
+    console.log("Calling HMRC /individuals/details");
 
     const hmrcResponse = await fetch(url, {
       method: "GET",
@@ -128,8 +131,12 @@ export default async function handler(req, res) {
 
     const data = await hmrcResponse.json();
 
+    // =========================
+    // HANDLE HMRC ERRORS PROPERLY
+    // =========================
     if (!hmrcResponse.ok) {
       console.error("HMRC error:", data);
+
       return res.status(hmrcResponse.status).json({
         error: "HMRC API failed",
         details: data,
@@ -143,11 +150,12 @@ export default async function handler(req, res) {
       success: true,
       message: "HMRC connection working",
       nino_used: cleanNino,
-      data,
+      hmrc_user: data,
     });
 
   } catch (err) {
     console.error("Submit error:", err);
+
     return res.status(500).json({
       error: err.message || "Internal server error",
     });
