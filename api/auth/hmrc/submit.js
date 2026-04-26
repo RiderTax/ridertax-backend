@@ -85,13 +85,9 @@ export default async function handler(req, res) {
     const fraudHeaders = buildFraudHeaders(req, userId);
 
     // =========================
-    // 4️⃣ HMRC API CALL (FIXED)
+    // 4️⃣ HMRC API CALL (FINAL - HELLO WORLD)
     // =========================
-
-    // ⚠️ TEMP TEST NINO (replace later from DB)
-    const nino = "AA123456A";
-
-    const endpoint = `/individuals/details/${nino}`;
+    const endpoint = "/hello/world";
     const url = `${HMRC_BASE}${endpoint}`;
 
     console.log("➡️ Calling HMRC:", url);
@@ -100,7 +96,7 @@ export default async function handler(req, res) {
       method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.hmrc.2.0+json",
+        Accept: "application/vnd.hmrc.1.0+json",
         ...fraudHeaders,
       },
     });
