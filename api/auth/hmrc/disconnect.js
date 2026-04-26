@@ -6,14 +6,17 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  // ✅ ALWAYS set CORS headers FIRST
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // ✅ ALWAYS set headers FIRST (VERY IMPORTANT)
+  res.setHeader("Access-Control-Allow-Origin", "https://ridertax.co.uk");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
 
-  // ✅ Handle preflight properly
+  // ✅ Handle preflight EARLY and EXIT
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return res.status(200).send("OK");
   }
 
   try {
@@ -32,7 +35,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing user_id" });
     }
 
-    console.log("🔌 Disconnect request:", user_id);
+    console.log("🔌 Disconnect:", user_id);
 
     const { error } = await supabase
       .from("hmrc_tokens")
@@ -44,9 +47,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Database error" });
     }
 
-    // ✅ IMPORTANT: include CORS header in FINAL response too
-    res.setHeader("Access-Control-Allow-Origin", "*");
-
     return res.status(200).json({
       success: true,
       disconnected: true,
@@ -54,9 +54,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error("❌ Server error:", err);
-
-    res.setHeader("Access-Control-Allow-Origin", "*");
-
     return res.status(500).json({ error: "Server error" });
   }
 }
