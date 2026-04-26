@@ -94,11 +94,11 @@ export default async function handler(req, res) {
     const fraudHeaders = buildFraudHeaders(req, userId);
 
     // =========================
-    // 4️⃣ HMRC API CALL (STABLE)
+    // 4️⃣ HMRC API CALL (CORRECT v3)
     // =========================
-    const nino = "AT907078C"; // ✅ HMRC sandbox user
+    const nino = "AT907078C"; // ✅ sandbox user
 
-    const endpoint = `/obligations/${nino}/ITSA?from=2024-04-06&to=2025-04-05`;
+    const endpoint = `/obligations/details/${nino}/income-and-expenditure`;
     const url = `${HMRC_BASE}${endpoint}`;
 
     console.log("➡️ Calling HMRC:", url);
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 5️⃣ AUDIT LOG (REQUIRED)
+    // 5️⃣ AUDIT LOG
     // =========================
     await supabase.from("hmrc_logs").insert({
       user_id: userId,
