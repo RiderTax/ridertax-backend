@@ -12,43 +12,45 @@ const HMRC_BASE =
 export default async function handler(req, res) {
   // ✅ CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  try {
-    const userId = req.query.user_id;
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-    if (!userId) {
+  try {
+    const { user_id } = req.query;
+
+    if (!user_id) {
       return res.status(400).json({ error: "Missing user_id" });
     }
 
     // =========================
     // 1️⃣ GET TOKEN
     // =========================
-    const { data: token, error } = await supabase
+    const { data: token } = await supabase
       .from("hmrc_tokens")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", user_id)
       .single();
 
-    if (error || !token) {
+    if (!token) {
       return res.status(401).json({ error: "No HMRC token found" });
     }
 
     let accessToken = token.access_token;
 
     // =========================
-    // 2️⃣ REFRESH TOKEN IF NEEDED
+    // 2️⃣ REFRESH TOKEN
     // =========================
     const isExpired = new Date() >= new Date(token.expires_at);
 
     if (isExpired) {
-      console.log("🔄 Token expired → refreshing...");
-
       const refreshResponse = await fetch(`${HMRC_BASE}/oauth/token`, {
         method: "POST",
         headers: {
@@ -65,10 +67,7 @@ export default async function handler(req, res) {
       const newTokens = await refreshResponse.json();
 
       if (!refreshResponse.ok) {
-        return res.status(401).json({
-          error: "Token refresh failed",
-          details: newTokens,
-        });
+        return res.status(401).json(newTokens);
       }
 
       const newExpiry = new Date(
@@ -81,9 +80,8 @@ export default async function handler(req, res) {
           access_token: newTokens.access_token,
           refresh_token: newTokens.refresh_token,
           expires_at: newExpiry,
-          updated_at: new Date().toISOString(),
         })
-        .eq("user_id", userId);
+        .eq("user_id", user_id);
 
       accessToken = newTokens.access_token;
     }
@@ -91,25 +89,43 @@ export default async function handler(req, res) {
     // =========================
     // 3️⃣ FRAUD HEADERS
     // =========================
-    const fraudHeaders = buildFraudHeaders(req, userId);
+    const fraudHeaders = buildFraudHeaders(req, user_id);
 
     // =========================
-    // 4️⃣ HMRC API CALL (CORRECT v3)
+    // 4️⃣ HMRC SUBMISSION (REAL)
     // =========================
-    const nino = "AT907078C"; // ✅ sandbox user
 
-    const endpoint = `/obligations/details/${nino}/income-and-expenditure`;
+    const nino = "AT907078C";
+    const businessId = "XBIT00479532773";
+
+    const endpoint = `/income-tax/nino/${nino}/sources/${businessId}/periodic-summaries`;
     const url = `${HMRC_BASE}${endpoint}`;
 
-    console.log("➡️ Calling HMRC:", url);
+    console.log("🚀 Submitting to HMRC:", url);
+
+    // 👉 SAMPLE DATA (replace with your real data)
+    const body = {
+      from: "2024-04-06",
+      to: "2024-07-05",
+      financials: {
+        incomes: {
+          turnover: 1000
+        },
+        expenses: {
+          consolidatedExpenses: 300
+        }
+      }
+    };
 
     const hmrcResponse = await fetch(url, {
-      method: "GET",
+      method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.hmrc.3.0+json",
+        "Content-Type": "application/json",
+        Accept: "application/vnd.hmrc.1.0+json",
         ...fraudHeaders,
       },
+      body: JSON.stringify(body),
     });
 
     const responseText = await hmrcResponse.text();
@@ -125,11 +141,11 @@ export default async function handler(req, res) {
     // 5️⃣ AUDIT LOG
     // =========================
     await supabase.from("hmrc_logs").insert({
-      user_id: userId,
+      user_id,
       endpoint,
-      method: "GET",
+      method: "POST",
       request_headers: fraudHeaders,
-      request_body: null,
+      request_body: body,
       response_status: hmrcResponse.status,
       response_body: data,
       created_at: new Date().toISOString(),
@@ -140,7 +156,7 @@ export default async function handler(req, res) {
     // =========================
     if (!hmrcResponse.ok) {
       return res.status(hmrcResponse.status).json({
-        error: "HMRC request failed",
+        error: "Submission failed",
         details: data,
       });
     }
@@ -150,11 +166,12 @@ export default async function handler(req, res) {
     // =========================
     return res.status(200).json({
       success: true,
+      message: "Submitted to HMRC successfully",
       data,
     });
 
   } catch (err) {
-    console.error("❌ Submit error:", err);
+    console.error("❌ Submission error:", err);
 
     return res.status(500).json({
       error: err.message,
