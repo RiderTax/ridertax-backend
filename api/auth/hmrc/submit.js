@@ -6,7 +6,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const HMRC_BASE = process.env.HMRC_BASE_URL || "https://test-api.service.hmrc.gov.uk";
+const HMRC_BASE =
+  process.env.HMRC_BASE_URL || "https://test-api.service.hmrc.gov.uk";
 
 export default async function handler(req, res) {
   try {
@@ -19,7 +20,7 @@ export default async function handler(req, res) {
     // =========================
     // 1️⃣ GET TOKEN
     // =========================
-    let { data: token, error } = await supabase
+    const { data: token, error } = await supabase
       .from("hmrc_tokens")
       .select("*")
       .eq("user_id", userId)
@@ -84,11 +85,10 @@ export default async function handler(req, res) {
     const fraudHeaders = buildFraudHeaders(req, userId);
 
     // =========================
-    // 4️⃣ HMRC API CALL
+    // 4️⃣ HMRC API CALL (✅ FIXED)
     // =========================
-    const endpoint = "/individuals/self-assessment/obligations";
-
-    const url = `${HMRC_BASE}${endpoint}?from=2024-04-06&to=2025-04-05`;
+    const endpoint = "/individuals/details";
+    const url = `${HMRC_BASE}${endpoint}`;
 
     const hmrcResponse = await fetch(url, {
       method: "GET",
@@ -110,7 +110,7 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 5️⃣ AUDIT LOG (🔥 REQUIRED FOR HMRC)
+    // 5️⃣ AUDIT LOG (🔥 REQUIRED)
     // =========================
     await supabase.from("hmrc_logs").insert({
       user_id: userId,
