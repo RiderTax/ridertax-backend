@@ -96,21 +96,31 @@ export default async function handler(req, res) {
     // =========================
     // 4️⃣ GET FRONTEND DATA ✅
     // =========================
-    const { income, expenses } = req.body || {};
+    const { income, expenses, nino, businessId } = req.body || {};
 
-    console.log("📥 Incoming data:", { income, expenses });
+    if (!nino || !businessId) {
+      return res.status(400).json({
+        error: "Missing nino or businessId",
+      });
+    }
 
-    // Safety fallback
+    const cleanNino = nino.replace(/\s/g, "").toUpperCase();
+    const cleanBusinessId = businessId.trim();
+
     const turnover = Number(income || 0);
     const totalExpenses = Number(expenses || 0);
+
+    console.log("📥 Incoming:", {
+      turnover,
+      totalExpenses,
+      nino: cleanNino,
+      businessId: cleanBusinessId,
+    });
 
     // =========================
     // 5️⃣ HMRC SUBMISSION
     // =========================
-    const nino = "AT907078C"; // sandbox user
-    const businessId = "XBIT00479532773";
-
-    const endpoint = `/income-tax/nino/${nino}/sources/${businessId}/periodic-summaries`;
+    const endpoint = `/income-tax/nino/${cleanNino}/sources/${cleanBusinessId}/periodic-summaries`;
     const url = `${HMRC_BASE}${endpoint}`;
 
     const body = {
