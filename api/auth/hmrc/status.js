@@ -1,46 +1,52 @@
 import { createClient } from "@supabase/supabase-js";
-import { applyCors } from "../../../utils/cors";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SERVICE_ROLE_KEY
-);
 
 export default async function handler(req, res) {
-  // ✅ Apply global CORS
-  const isPreflight = applyCors(req, res);
-  if (isPreflight) return;
+  // ✅ CORS (hardcoded – reliable)
+  res.setHeader("Access-Control-Allow-Origin", "https://ridertax.co.uk");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // ✅ Preflight
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   if (req.method !== "GET") {
     return res.status(405).json({ connected: false });
   }
 
   try {
+    console.log("✅ STATUS API HIT");
+
     const user_id = req.query?.user_id;
 
     if (!user_id) {
       return res.status(400).json({ connected: false });
     }
 
-    console.log("🔍 Checking HMRC status for:", user_id);
+    // 🔥 IMPORTANT: use SAME env as other files
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SERVICE_ROLE_KEY
+    );
 
     const { data, error } = await supabase
       .from("hmrc_tokens")
-      .select("user_id") // ✅ lightweight query
+      .select("user_id")
       .eq("user_id", user_id)
-      .maybeSingle(); // ✅ safer than .single()
+      .maybeSingle();
 
     if (error) {
-      console.error("❌ DB error:", error);
+      console.error("❌ DB ERROR:", error);
       return res.status(500).json({ connected: false });
     }
 
-    const connected = !!data;
-
-    return res.status(200).json({ connected });
+    return res.status(200).json({
+      connected: !!data,
+    });
 
   } catch (err) {
-    console.error("❌ STATUS ERROR:", err);
+    console.error("❌ STATUS CRASH:", err);
     return res.status(500).json({ connected: false });
   }
 }
