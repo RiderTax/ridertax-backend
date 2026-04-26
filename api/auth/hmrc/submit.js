@@ -10,6 +10,15 @@ const HMRC_BASE =
   process.env.HMRC_BASE_URL || "https://test-api.service.hmrc.gov.uk";
 
 export default async function handler(req, res) {
+  // ✅ CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   try {
     const userId = req.query.user_id;
 
@@ -33,13 +42,11 @@ export default async function handler(req, res) {
     let accessToken = token.access_token;
 
     // =========================
-    // 2️⃣ REFRESH TOKEN IF NEEDED
+    // 2️⃣ REFRESH TOKEN
     // =========================
     const isExpired = new Date() >= new Date(token.expires_at);
 
     if (isExpired) {
-      console.log("🔄 Token expired → refreshing...");
-
       const refreshResponse = await fetch(`${HMRC_BASE}/oauth/token`, {
         method: "POST",
         headers: {
@@ -85,9 +92,11 @@ export default async function handler(req, res) {
     const fraudHeaders = buildFraudHeaders(req, userId);
 
     // =========================
-    // 4️⃣ HMRC API CALL (FINAL - HELLO WORLD)
+    // 4️⃣ HMRC API CALL (CORRECT)
     // =========================
-    const endpoint = "/hello/world";
+
+    const nino = "AA123456A"; // test user (HMRC sandbox)
+    const endpoint = `/individuals/details/${nino}`;
     const url = `${HMRC_BASE}${endpoint}`;
 
     console.log("➡️ Calling HMRC:", url);
@@ -96,7 +105,7 @@ export default async function handler(req, res) {
       method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.hmrc.1.0+json",
+        Accept: "application/vnd.hmrc.2.0+json", // ✅ correct version
         ...fraudHeaders,
       },
     });
@@ -111,7 +120,7 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 5️⃣ AUDIT LOG (REQUIRED)
+    // 5️⃣ AUDIT LOG
     // =========================
     await supabase.from("hmrc_logs").insert({
       user_id: userId,
@@ -125,7 +134,7 @@ export default async function handler(req, res) {
     });
 
     // =========================
-    // 6️⃣ HANDLE ERRORS
+    // 6️⃣ ERROR HANDLING
     // =========================
     if (!hmrcResponse.ok) {
       return res.status(hmrcResponse.status).json({
