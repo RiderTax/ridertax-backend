@@ -51,6 +51,8 @@ export default async function handler(req, res) {
     const isExpired = new Date() >= new Date(token.expires_at);
 
     if (isExpired) {
+      console.log("🔄 Refreshing token...");
+
       const refreshResponse = await fetch(`${HMRC_BASE}/oauth/token`, {
         method: "POST",
         headers: {
@@ -92,30 +94,40 @@ export default async function handler(req, res) {
     const fraudHeaders = buildFraudHeaders(req, user_id);
 
     // =========================
-    // 4️⃣ HMRC SUBMISSION (REAL)
+    // 4️⃣ GET FRONTEND DATA ✅
     // =========================
+    const { income, expenses } = req.body || {};
 
-    const nino = "AT907078C";
+    console.log("📥 Incoming data:", { income, expenses });
+
+    // Safety fallback
+    const turnover = Number(income || 0);
+    const totalExpenses = Number(expenses || 0);
+
+    // =========================
+    // 5️⃣ HMRC SUBMISSION
+    // =========================
+    const nino = "AT907078C"; // sandbox user
     const businessId = "XBIT00479532773";
 
     const endpoint = `/income-tax/nino/${nino}/sources/${businessId}/periodic-summaries`;
     const url = `${HMRC_BASE}${endpoint}`;
 
-    console.log("🚀 Submitting to HMRC:", url);
-
-    // 👉 SAMPLE DATA (replace with your real data)
     const body = {
       from: "2024-04-06",
       to: "2024-07-05",
       financials: {
         incomes: {
-          turnover: 1000
+          turnover,
         },
         expenses: {
-          consolidatedExpenses: 300
-        }
-      }
+          consolidatedExpenses: totalExpenses,
+        },
+      },
     };
+
+    console.log("🚀 Submitting to HMRC:", url);
+    console.log("📤 Payload:", body);
 
     const hmrcResponse = await fetch(url, {
       method: "POST",
@@ -138,7 +150,7 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 5️⃣ AUDIT LOG
+    // 6️⃣ AUDIT LOG
     // =========================
     await supabase.from("hmrc_logs").insert({
       user_id,
@@ -152,9 +164,11 @@ export default async function handler(req, res) {
     });
 
     // =========================
-    // 6️⃣ ERROR HANDLING
+    // 7️⃣ ERROR HANDLING
     // =========================
     if (!hmrcResponse.ok) {
+      console.error("❌ HMRC Error:", data);
+
       return res.status(hmrcResponse.status).json({
         error: "Submission failed",
         details: data,
@@ -162,8 +176,10 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 7️⃣ SUCCESS
+    // 8️⃣ SUCCESS
     // =========================
+    console.log("✅ Submission successful");
+
     return res.status(200).json({
       success: true,
       message: "Submitted to HMRC successfully",
