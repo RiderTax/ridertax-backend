@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { applyCors } from "../../utils/cors";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -6,24 +7,15 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  // ✅ ALWAYS set headers FIRST (VERY IMPORTANT)
-  res.setHeader("Access-Control-Allow-Origin", "https://ridertax.co.uk");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+  // ✅ Apply CORS
+  const isPreflight = applyCors(req, res);
+  if (isPreflight) return;
 
-  // ✅ Handle preflight EARLY and EXIT
-  if (req.method === "OPTIONS") {
-    return res.status(200).send("OK");
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
-
     const body =
       typeof req.body === "string"
         ? JSON.parse(req.body)
@@ -43,7 +35,7 @@ export default async function handler(req, res) {
       .eq("user_id", user_id);
 
     if (error) {
-      console.error("❌ Supabase error:", error);
+      console.error("❌ DB error:", error);
       return res.status(500).json({ error: "Database error" });
     }
 
