@@ -42,11 +42,13 @@ export default async function handler(req, res) {
     let accessToken = token.access_token;
 
     // =========================
-    // 2️⃣ REFRESH TOKEN
+    // 2️⃣ REFRESH TOKEN IF NEEDED
     // =========================
     const isExpired = new Date() >= new Date(token.expires_at);
 
     if (isExpired) {
+      console.log("🔄 Token expired → refreshing...");
+
       const refreshResponse = await fetch(`${HMRC_BASE}/oauth/token`, {
         method: "POST",
         headers: {
@@ -92,12 +94,11 @@ export default async function handler(req, res) {
     const fraudHeaders = buildFraudHeaders(req, userId);
 
     // =========================
-    // 4️⃣ HMRC API CALL (FINAL WORKING)
+    // 4️⃣ HMRC API CALL (STABLE)
     // =========================
+    const nino = "AT907078C"; // ✅ HMRC sandbox user
 
-    const nino = "AT907078C"; // ✅ REAL sandbox user
-
-    const endpoint = `/individuals/income/${nino}/2024-25`;
+    const endpoint = `/obligations/${nino}/ITSA?from=2024-04-06&to=2025-04-05`;
     const url = `${HMRC_BASE}${endpoint}`;
 
     console.log("➡️ Calling HMRC:", url);
@@ -106,7 +107,7 @@ export default async function handler(req, res) {
       method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.hmrc.1.2+json", // ✅ correct version
+        Accept: "application/vnd.hmrc.3.0+json",
         ...fraudHeaders,
       },
     });
@@ -121,7 +122,7 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 5️⃣ AUDIT LOG
+    // 5️⃣ AUDIT LOG (REQUIRED)
     // =========================
     await supabase.from("hmrc_logs").insert({
       user_id: userId,
