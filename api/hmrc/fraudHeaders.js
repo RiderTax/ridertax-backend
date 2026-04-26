@@ -1,18 +1,42 @@
+import crypto from "crypto";
+
 export function buildFraudHeaders(req, userId) {
+  const now = new Date().toISOString();
+
   return {
-    "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
-    "Gov-Client-Device-ID": userId,
-    "Gov-Client-User-IDs": `user=${userId}`,
-    "Gov-Client-Timezone": "UTC+00:00",
-    "Gov-Client-Local-IPs": req.headers["x-forwarded-for"] || "127.0.0.1",
-    "Gov-Client-Screens": "width=1920&height=1080",
-    "Gov-Client-Window-Size": "width=1200&height=800",
-    "Gov-Client-Browser-Plugins": "none",
-    "Gov-Client-Browser-JS-User-Agent": req.headers["user-agent"] || "unknown",
-    "Gov-Client-Browser-Do-Not-Track": "false",
-    "Gov-Client-Multi-Factor": "type=none",
-    "Gov-Vendor-Version": "ridertax=1.0.0",
-    "Gov-Vendor-License-IDs": "ridertax-license",
-    "Gov-Client-Public-IP": req.headers["x-forwarded-for"] || "127.0.0.1",
+    // =============================
+    // CLIENT HEADERS
+    // =============================
+    "gov-client-device-id": crypto.randomUUID(), // MUST be UUID
+    "gov-client-user-ids": `userId=${userId}`,
+
+    "gov-client-timezone": "UTC+00:00",
+
+    "gov-client-local-ips": "127.0.0.1",
+    "gov-client-local-ips-timestamp": now,
+
+    "gov-client-public-ip": req.headers["x-forwarded-for"] || "8.8.8.8",
+    "gov-client-public-ip-timestamp": now,
+    "gov-client-public-port": "443",
+
+    // MFA (STRICT FORMAT)
+    "gov-client-multi-factor": "type=totp",
+
+    // Screen info (STRICT FORMAT)
+    "gov-client-screens": "width=1920&height=1080&colourDepth=24",
+
+    // =============================
+    // VENDOR HEADERS
+    // =============================
+    "gov-vendor-product-name": "RiderTax",
+    "gov-vendor-version": "1.0.0",
+    "gov-vendor-license-ids": "licenseId=RIDER123",
+
+    // Network headers
+    "gov-vendor-forwarded": `for=${req.headers["x-forwarded-for"] || "8.8.8.8"}`,
+    "gov-vendor-public-ip": req.headers["x-forwarded-for"] || "8.8.8.8",
+
+    // Optional (but recommended)
+    "gov-client-user-agent": req.headers["user-agent"] || "RiderTaxApp",
   };
 }
