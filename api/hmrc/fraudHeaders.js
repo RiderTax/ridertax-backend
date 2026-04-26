@@ -2,14 +2,13 @@ import crypto from "crypto";
 
 export function buildFraudHeaders(req, userId) {
   const now = new Date().toISOString();
-
   const ip = req.headers["x-forwarded-for"] || "8.8.8.8";
 
   return {
     // =============================
     // CLIENT HEADERS
     // =============================
-    "gov-client-connection-method": "WEB_APP", // ✅ FIX
+    "gov-client-connection-method": "WEB_APP_VIA_SERVER", // ✅ CORRECT for your setup
 
     "gov-client-device-id": crypto.randomUUID(),
     "gov-client-user-ids": `userId=${userId}`,
@@ -37,7 +36,7 @@ export function buildFraudHeaders(req, userId) {
     "gov-vendor-forwarded": `for=${ip}`,
     "gov-vendor-public-ip": ip,
 
-    // OPTIONAL
+    // OPTIONAL (but good)
     "gov-client-user-agent": req.headers["user-agent"] || "RiderTaxApp",
   };
 }
