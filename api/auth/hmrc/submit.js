@@ -1,10 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
-import { buildFraudHeaders } from "../hmrc/fraudHeaders"; // ✅ make sure path is correct
+import { buildFraudHeaders } from "../hmrc/fraudHeaders";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+const HMRC_BASE = process.env.HMRC_BASE_URL || "https://test-api.service.hmrc.gov.uk";
 
 export default async function handler(req, res) {
   try {
@@ -14,7 +16,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing user_id" });
     }
 
-    // 1️⃣ GET TOKEN FROM DB
+    // =========================
+    // 1️⃣ GET TOKEN
+    // =========================
     let { data: token, error } = await supabase
       .from("hmrc_tokens")
       .select("*")
@@ -27,31 +31,26 @@ export default async function handler(req, res) {
 
     let accessToken = token.access_token;
 
+    // =========================
     // 2️⃣ CHECK EXPIRY
-    const now = new Date();
-    const expiry = new Date(token.expires_at);
+    // =========================
+    const isExpired = new Date() >= new Date(token.expires_at);
 
-    const isExpired = now >= expiry;
-
-    // 3️⃣ REFRESH IF EXPIRED
     if (isExpired) {
-      console.log("Token expired → refreshing...");
+      console.log("🔄 Token expired → refreshing...");
 
-      const refreshResponse = await fetch(
-        "https://test-api.service.hmrc.gov.uk/oauth/token",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            grant_type: "refresh_token",
-            refresh_token: token.refresh_token,
-            client_id: process.env.HMRC_CLIENT_ID,
-            client_secret: process.env.HMRC_CLIENT_SECRET,
-          }),
-        }
-      );
+      const refreshResponse = await fetch(`${HMRC_BASE}/oauth/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: token.refresh_token,
+          client_id: process.env.HMRC_CLIENT_ID,
+          client_secret: process.env.HMRC_CLIENT_SECRET,
+        }),
+      });
 
       const newTokens = await refreshResponse.json();
 
@@ -66,7 +65,6 @@ export default async function handler(req, res) {
         Date.now() + newTokens.expires_in * 1000
       ).toISOString();
 
-      // 💾 SAVE NEW TOKENS
       await supabase
         .from("hmrc_tokens")
         .update({
@@ -80,24 +78,54 @@ export default async function handler(req, res) {
       accessToken = newTokens.access_token;
     }
 
-    // 4️⃣ BUILD FRAUD HEADERS (🚨 CRITICAL FIX)
+    // =========================
+    // 3️⃣ FRAUD HEADERS
+    // =========================
     const fraudHeaders = buildFraudHeaders(req, userId);
 
-    // 5️⃣ CALL HMRC API
-    const hmrcResponse = await fetch(
-      "https://test-api.service.hmrc.gov.uk/individuals/self-assessment/obligations?from=2024-04-06&to=2025-04-05",
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/vnd.hmrc.1.0+json",
-          ...fraudHeaders, // ✅ THIS FIXES YOUR 401
-        },
-      }
-    );
+    // =========================
+    // 4️⃣ HMRC API CALL
+    // =========================
+    const endpoint = "/individuals/self-assessment/obligations";
 
-    const data = await hmrcResponse.json();
+    const url = `${HMRC_BASE}${endpoint}?from=2024-04-06&to=2025-04-05`;
 
+    const hmrcResponse = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/vnd.hmrc.1.0+json",
+        "Content-Type": "application/json",
+        ...fraudHeaders,
+      },
+    });
+
+    const responseText = await hmrcResponse.text();
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = responseText;
+    }
+
+    // =========================
+    // 5️⃣ AUDIT LOG (🔥 REQUIRED FOR HMRC)
+    // =========================
+    await supabase.from("hmrc_logs").insert({
+      user_id: userId,
+      endpoint,
+      method: "GET",
+      request_headers: fraudHeaders,
+      request_body: null,
+      response_status: hmrcResponse.status,
+      response_body: data,
+      created_at: new Date().toISOString(),
+    });
+
+    // =========================
+    // 6️⃣ HANDLE ERRORS
+    // =========================
     if (!hmrcResponse.ok) {
       return res.status(hmrcResponse.status).json({
         error: "HMRC request failed",
@@ -105,14 +133,17 @@ export default async function handler(req, res) {
       });
     }
 
-    // ✅ SUCCESS
+    // =========================
+    // 7️⃣ SUCCESS
+    // =========================
     return res.status(200).json({
       success: true,
       data,
     });
 
   } catch (err) {
-    console.error("Submit error:", err);
+    console.error("❌ Submit error:", err);
+
     return res.status(500).json({
       error: err.message,
     });
