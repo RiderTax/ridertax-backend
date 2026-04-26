@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { buildFraudHeaders } from "../../utils/hmrcFraudHeaders";
+import { buildFraudHeaders } from "../../hmrc/fraudHeaders";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
