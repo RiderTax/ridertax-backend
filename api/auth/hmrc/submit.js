@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { buildFraudHeaders } from "../../hmrc/fraudHeaders";
+import { buildFraudHeaders } from "../../utils/hmrcFraudHeaders";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     let accessToken = token.access_token;
 
     // =========================
-    // 2️⃣ CHECK EXPIRY
+    // 2️⃣ REFRESH TOKEN IF NEEDED
     // =========================
     const isExpired = new Date() >= new Date(token.expires_at);
 
@@ -85,17 +85,22 @@ export default async function handler(req, res) {
     const fraudHeaders = buildFraudHeaders(req, userId);
 
     // =========================
-    // 4️⃣ HMRC API CALL (✅ FIXED)
+    // 4️⃣ HMRC API CALL (FIXED)
     // =========================
-    const endpoint = "/individuals/details";
+
+    // ⚠️ TEMP TEST NINO (replace later from DB)
+    const nino = "AA123456A";
+
+    const endpoint = `/individuals/details/${nino}`;
     const url = `${HMRC_BASE}${endpoint}`;
+
+    console.log("➡️ Calling HMRC:", url);
 
     const hmrcResponse = await fetch(url, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.hmrc.1.0+json",
-        "Content-Type": "application/json",
+        Accept: "application/vnd.hmrc.2.0+json",
         ...fraudHeaders,
       },
     });
@@ -110,7 +115,7 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 5️⃣ AUDIT LOG (🔥 REQUIRED)
+    // 5️⃣ AUDIT LOG (REQUIRED)
     // =========================
     await supabase.from("hmrc_logs").insert({
       user_id: userId,
