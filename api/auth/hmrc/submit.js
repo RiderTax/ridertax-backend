@@ -92,12 +92,12 @@ export default async function handler(req, res) {
     const fraudHeaders = buildFraudHeaders(req, userId);
 
     // =========================
-    // 4️⃣ HMRC API CALL (FIXED)
+    // 4️⃣ HMRC API CALL (FINAL WORKING)
     // =========================
-    const nino = "AA123456A";
 
-    // ✅ FINAL CORRECT ENDPOINT
-    const endpoint = `/obligations/${nino}/ITSA?from=2024-04-06&to=2025-04-05`;
+    const nino = "AT907078C"; // ✅ REAL sandbox user
+
+    const endpoint = `/individuals/income/${nino}/2024-25`;
     const url = `${HMRC_BASE}${endpoint}`;
 
     console.log("➡️ Calling HMRC:", url);
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
       method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.hmrc.3.0+json",
+        Accept: "application/vnd.hmrc.1.2+json", // ✅ correct version
         ...fraudHeaders,
       },
     });
