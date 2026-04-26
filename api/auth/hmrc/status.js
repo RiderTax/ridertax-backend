@@ -1,43 +1,46 @@
-export default async function handler(req, res) {
-  // ✅ CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "https://ridertax.co.uk");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+import { createClient } from "@supabase/supabase-js";
+import { applyCors } from "../../utils/cors";
 
-  // ✅ Handle preflight request
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SERVICE_ROLE_KEY
+);
+
+export default async function handler(req, res) {
+  // ✅ Apply global CORS
+  const isPreflight = applyCors(req, res);
+  if (isPreflight) return;
+
+  if (req.method !== "GET") {
+    return res.status(405).json({ connected: false });
   }
 
   try {
-    const { user_id } = req.query;
+    const user_id = req.query?.user_id;
 
     if (!user_id) {
       return res.status(400).json({ connected: false });
     }
 
-    // 🔗 Supabase
-    const { createClient } = await import("@supabase/supabase-js");
-
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    console.log("🔍 Checking HMRC status for:", user_id);
 
     const { data, error } = await supabase
       .from("hmrc_tokens")
-      .select("*")
+      .select("user_id") // ✅ lightweight query
       .eq("user_id", user_id)
-      .single();
+      .maybeSingle(); // ✅ safer than .single()
 
-    if (error || !data) {
-      return res.status(200).json({ connected: false });
+    if (error) {
+      console.error("❌ DB error:", error);
+      return res.status(500).json({ connected: false });
     }
 
-    return res.status(200).json({ connected: true });
+    const connected = !!data;
+
+    return res.status(200).json({ connected });
 
   } catch (err) {
-    console.error("STATUS ERROR:", err);
+    console.error("❌ STATUS ERROR:", err);
     return res.status(500).json({ connected: false });
   }
 }
