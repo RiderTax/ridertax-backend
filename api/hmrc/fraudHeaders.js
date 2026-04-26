@@ -14,7 +14,7 @@ function getPublicIP(req) {
 
 export function buildFraudHeaders(req, user_id) {
   // ✅ STABLE device ID (CRITICAL FIX)
-  const deviceId = hash(user_id);
+  const deviceId = crypto.randomUUID();
 
   const publicIP = getPublicIP(req);
   const timestamp = new Date().toISOString();
