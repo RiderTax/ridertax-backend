@@ -12,18 +12,22 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   try {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const route = url.pathname.replace("/api/hmrc", "");
+    // ✅ FIXED ROUTING (THIS WAS YOUR ISSUE)
+    const route = req.url;
 
     console.log("👉 HMRC ROUTE:", route);
 
+    // ===============================
     // ✅ ROOT
-    if (route === "" || route === "/") {
+    // ===============================
+    if (route === "/" || route === "") {
       return res.status(200).send("HMRC API Root Working ✅");
     }
 
+    // ===============================
     // 🛡️ VALIDATE HEADERS
-    if (route === "/validate-headers") {
+    // ===============================
+    if (route.startsWith("/validate-headers")) {
       try {
         const fraudHeaders = {
           "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -56,20 +60,27 @@ export default async function handler(req, res) {
       }
     }
 
+    // ===============================
     // 📜 LOGS
-    if (route === "/logs") {
+    // ===============================
+    if (route.startsWith("/logs")) {
       const { data, error } = await supabase
         .from("hmrc_logs")
         .select("*")
         .limit(50)
         .order("created_at", { ascending: false });
 
-      if (error) return res.status(200).json({ logs: [] });
+      if (error) {
+        console.error("❌ LOG ERROR:", error);
+        return res.status(200).json({ logs: [] });
+      }
 
       return res.status(200).json({ logs: data || [] });
     }
 
-    // 🔄 REFRESH
+    // ===============================
+    // 🔄 REFRESH TOKEN
+    // ===============================
     if (route.startsWith("/refresh")) {
       const userId = route.split("/").pop();
 
@@ -108,19 +119,23 @@ export default async function handler(req, res) {
       return res.status(200).send("Token refreshed ✅");
     }
 
-    // 🚀 SUBMIT (placeholder)
-    if (route === "/submit") {
+    // ===============================
+    // 🚀 SUBMIT
+    // ===============================
+    if (route.startsWith("/submit")) {
       return res.status(200).json({
         success: true,
         message: "Submit endpoint reachable ✅",
       });
     }
 
+    // ===============================
     // ❌ FALLBACK
+    // ===============================
     return res.status(404).send("Route not found");
 
   } catch (err) {
-    console.error("💥 HMRC ERROR:", err.message);
+    console.error("💥 HMRC ERROR:", err);
     return res.status(500).send("Internal server error");
   }
 }
