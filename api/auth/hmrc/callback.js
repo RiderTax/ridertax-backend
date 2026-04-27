@@ -22,14 +22,37 @@ export default async function handler(req, res) {
     }
 
     if (!state || typeof state !== "string") {
-      console.error("❌ Missing or invalid state (user_id):", state);
+      console.error("❌ Missing or invalid state");
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
 
     // =========================
-    // ✅ STABLE USER (FIXED MODE)
+    // 🔐 DECODE STATE (REAL USER)
     // =========================
-    const user_id = "test-user";
+    let decoded;
+
+    try {
+      decoded = JSON.parse(
+        Buffer.from(state, "base64").toString("utf-8")
+      );
+    } catch (e) {
+      console.error("❌ Failed to decode state:", e);
+      return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
+    }
+
+    const { user_id, ts } = decoded;
+
+    if (!user_id) {
+      console.error("❌ user_id missing in state");
+      return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
+    }
+
+    // ⏱ Optional expiry check (5 mins)
+    const FIVE_MIN = 5 * 60 * 1000;
+    if (ts && Date.now() - ts > FIVE_MIN) {
+      console.error("❌ State expired");
+      return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
+    }
 
     console.log("✅ Using user_id:", user_id);
 
