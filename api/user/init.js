@@ -13,25 +13,41 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing user_id" });
     }
 
-    // check if exists
-    const { data: existing } = await supabase
+    // 🔍 Check if user exists
+    const { data: existing, error } = await supabase
       .from("users")
-      .select("id")
+      .select("*")
       .eq("id", user_id)
       .single();
 
     if (!existing) {
-      await supabase.from("users").insert({
-        id: user_id, // ✅ IMPORTANT: use "id" (your table column)
-        onboarding_completed: false,
-      });
+      console.log("❌ USER NOT FOUND → creating");
 
-      console.log("✅ User created:", user_id);
+      const { error: insertError } = await supabase
+        .from("users")
+        .insert({
+          id: user_id, // ✅ CRITICAL (NOT user_id column)
+          onboarding_completed: false
+        });
+
+      if (insertError) {
+        console.error("INSERT ERROR:", insertError);
+        return res.status(500).json({ error: insertError.message });
+      }
+
+      return res.json({
+        onboarding_completed: false
+      });
     }
 
-    return res.json({ success: true });
+    console.log("✅ USER FOUND:", existing.id);
+
+    return res.json({
+      onboarding_completed: existing.onboarding_completed
+    });
 
   } catch (err) {
+    console.error("INIT ERROR:", err);
     return res.status(500).json({ error: err.message });
   }
 }
