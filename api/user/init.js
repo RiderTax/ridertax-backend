@@ -6,12 +6,11 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  // ✅ CORS HEADERS (CRITICAL)
+  // ✅ CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // ✅ HANDLE PREFLIGHT
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -26,30 +25,41 @@ export default async function handler(req, res) {
 
     const { user_id } = body;
 
-    console.log("INIT HIT:", user_id);
+    console.log("INIT USER ID:", user_id);
 
     if (!user_id) {
       return res.status(400).json({ error: "Missing user_id" });
     }
 
-    // 🔍 CHECK IF USER EXISTS
-    const { data: existingUser } = await supabase
+    // 🔍 CHECK USER
+    const { data: existingUser, error: fetchError } = await supabase
       .from("users")
       .select("*")
       .eq("id", user_id)
-      .single();
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("FETCH ERROR:", fetchError);
+      return res.status(500).json({ error: fetchError.message });
+    }
 
     if (!existingUser) {
-      console.log("🆕 Creating new user...");
+      console.log("🆕 Creating user...");
 
-      const { error: insertError } = await supabase.from("users").insert({
-        id: user_id,
-        onboarding_completed: false,
-      });
+      const { error: insertError } = await supabase
+        .from("users")
+        .insert([
+          {
+            id: user_id,
+            onboarding_completed: false,
+          },
+        ]);
 
       if (insertError) {
-        console.error("Insert error:", insertError);
-        return res.status(500).json({ error: "Failed to create user" });
+        console.error("INSERT ERROR:", insertError);
+        return res.status(500).json({
+          error: insertError.message,
+        });
       }
 
       return res.status(200).json({
@@ -57,14 +67,16 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log("👤 Existing user found");
+    console.log("👤 User exists");
 
     return res.status(200).json({
       onboarding_completed: existingUser.onboarding_completed,
     });
 
   } catch (err) {
-    console.error("INIT ERROR:", err);
-    return res.status(500).json({ error: "Server error" });
+    console.error("CRASH:", err);
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 }
