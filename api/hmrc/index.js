@@ -12,22 +12,17 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   try {
-    // ✅ FIXED ROUTING (THIS WAS YOUR ISSUE)
-    const route = req.url;
+    const route = req.url.replace("/api/hmrc", "").split("?")[0];
 
     console.log("👉 HMRC ROUTE:", route);
 
-    // ===============================
     // ✅ ROOT
-    // ===============================
-    if (route === "/" || route === "") {
+    if (route === "" || route === "/") {
       return res.status(200).send("HMRC API Root Working ✅");
     }
 
-    // ===============================
     // 🛡️ VALIDATE HEADERS
-    // ===============================
-    if (route.startsWith("/validate-headers")) {
+    if (route === "/validate-headers") {
       try {
         const fraudHeaders = {
           "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -37,7 +32,7 @@ export default async function handler(req, res) {
           "Gov-Client-Timezone": "UTC",
           "Gov-Vendor-Product-Name": "RiderTax",
           "Gov-Vendor-Version": "1.0.0",
-          "Accept": "application/vnd.hmrc.1.0+json",
+          Accept: "application/vnd.hmrc.1.0+json",
           "Content-Type": "application/json",
         };
 
@@ -60,27 +55,20 @@ export default async function handler(req, res) {
       }
     }
 
-    // ===============================
     // 📜 LOGS
-    // ===============================
-    if (route.startsWith("/logs")) {
+    if (route === "/logs") {
       const { data, error } = await supabase
         .from("hmrc_logs")
         .select("*")
         .limit(50)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("❌ LOG ERROR:", error);
-        return res.status(200).json({ logs: [] });
-      }
+      if (error) return res.status(200).json({ logs: [] });
 
       return res.status(200).json({ logs: data || [] });
     }
 
-    // ===============================
-    // 🔄 REFRESH TOKEN
-    // ===============================
+    // 🔄 REFRESH
     if (route.startsWith("/refresh")) {
       const userId = route.split("/").pop();
 
@@ -119,23 +107,18 @@ export default async function handler(req, res) {
       return res.status(200).send("Token refreshed ✅");
     }
 
-    // ===============================
     // 🚀 SUBMIT
-    // ===============================
-    if (route.startsWith("/submit")) {
+    if (route === "/submit") {
       return res.status(200).json({
         success: true,
         message: "Submit endpoint reachable ✅",
       });
     }
 
-    // ===============================
-    // ❌ FALLBACK
-    // ===============================
     return res.status(404).send("Route not found");
 
   } catch (err) {
-    console.error("💥 HMRC ERROR:", err);
+    console.error("💥 HMRC ERROR:", err.message);
     return res.status(500).send("Internal server error");
   }
 }
