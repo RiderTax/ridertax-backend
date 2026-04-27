@@ -1,63 +1,50 @@
 export default async function handler(req, res) {
   try {
-    // ✅ FIXED ROUTING (handles all cases properly)
-    const route = req.query.route;
-    const path = Array.isArray(route)
-      ? "/" + route.join("/")
-      : route
-      ? "/" + route
-      : "/";
+    const route = req.query.route || []
+    const path = "/" + route.join("/")
 
-    console.log("👉 HMRC ROUTE:", path);
+    console.log("👉 HMRC ROUTE:", path)
 
     // ROOT
     if (path === "/" || path === "") {
-      return res.status(200).send("HMRC API Root Working ✅");
+      return res.status(200).send("HMRC API Root Working ✅")
     }
 
-    // LOGS (UNCHANGED)
+    // LOGS
     if (path === "/logs") {
-      return res.status(200).json({
-        logs: [],
-      });
+      return res.status(200).json({ logs: [] })
     }
 
-    // SUBMIT (UNCHANGED)
+    // SUBMIT
     if (path === "/submit") {
       return res.status(200).json({
         success: true,
-        message: "Submit endpoint working ✅",
-      });
+        message: "Submit endpoint working ✅"
+      })
     }
 
-    // VALIDATE HEADERS (UNCHANGED LOGIC)
+    // VALIDATE HEADERS
     if (path === "/validate-headers") {
-      const headers = {
-        "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
-        "Gov-Client-User-Agent": req.headers["user-agent"] || "unknown",
-        "Gov-Client-Public-IP":
-          req.headers["x-forwarded-for"]?.split(",")[0] || "127.0.0.1",
-        "Gov-Client-Timezone": "UTC",
-        "Gov-Vendor-Product-Name": "RiderTax",
-        "Gov-Vendor-Version": "1.0.0",
-      };
-
       return res.status(200).json({
-        success: true,
-        message: "Headers generated successfully ✅",
-        headers,
-      });
+        success: false,
+        error: {
+          code: "MATCHING_RESOURCE_NOT_FOUND",
+          message: "A resource with the name in the request can not be found in the API"
+        }
+      })
     }
 
     // FALLBACK
-    return res.status(404).send("Route not found");
+    return res.status(404).json({
+      error: "Route not found",
+      path
+    })
 
   } catch (error) {
-    console.error("❌ HMRC ERROR:", error);
-
+    console.error("❌ ERROR:", error)
     return res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+      error: "Internal server error",
+      details: error.message
+    })
   }
 }
