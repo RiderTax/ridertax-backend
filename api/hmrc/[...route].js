@@ -12,23 +12,23 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   try {
-    const route = req.query.route || [];
+    // ✅ ALWAYS RELIABLE (do NOT use req.query)
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const path = url.pathname.replace("/api/hmrc", "");
 
-    console.log("👉 ROUTE ARRAY:", route);
+    console.log("👉 PATH:", path);
 
     // ===============================
     // ✅ ROOT
     // ===============================
-    if (route.length === 0) {
+    if (path === "" || path === "/") {
       return res.status(200).send("HMRC API Root Working ✅");
     }
-
-    const path = route[0];
 
     // ===============================
     // 🛡️ VALIDATE HEADERS
     // ===============================
-    if (path === "validate-headers") {
+    if (path === "/validate-headers") {
       try {
         const fraudHeaders = {
           "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -64,7 +64,7 @@ export default async function handler(req, res) {
     // ===============================
     // 📜 LOGS
     // ===============================
-    if (path === "logs") {
+    if (path === "/logs") {
       const { data, error } = await supabase
         .from("hmrc_logs")
         .select("*")
@@ -82,8 +82,8 @@ export default async function handler(req, res) {
     // ===============================
     // 🔄 REFRESH
     // ===============================
-    if (path === "refresh") {
-      const userId = route[1];
+    if (path.startsWith("/refresh")) {
+      const userId = path.split("/").pop();
 
       const { data } = await supabase
         .from("hmrc_tokens")
@@ -121,10 +121,10 @@ export default async function handler(req, res) {
     // ===============================
     // 🚀 SUBMIT
     // ===============================
-    if (path === "submit") {
+    if (path === "/submit") {
       return res.status(200).json({
         success: true,
-        message: "Submit endpoint reachable ✅",
+        message: "Submit endpoint working ✅",
       });
     }
 
