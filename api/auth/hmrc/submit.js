@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     const body =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    const { user_id, nino } = body || {};
+    const { user_id } = body || {};
 
     console.log("Incoming body:", body);
 
@@ -43,14 +43,31 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing user_id" });
     }
 
-    if (!nino) {
-      return res.status(400).json({ error: "Missing NINO" });
+    // =========================
+    // 2️⃣ GET USER PROFILE (NINO FROM DB)
+    // =========================
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", user_id)
+      .single();
+
+    if (userError || !user) {
+      return res.status(404).json({ error: "User not found" });
     }
 
-    const cleanNino = nino.replace(/\s/g, "").toUpperCase();
+    if (!user.national_insurance_number) {
+      return res.status(400).json({
+        error: "Missing NINO in user profile",
+      });
+    }
+
+    const cleanNino = user.national_insurance_number
+      .replace(/\s/g, "")
+      .toUpperCase();
 
     // =========================
-    // 2️⃣ GET TOKEN FROM DB
+    // 3️⃣ GET TOKEN FROM DB
     // =========================
     const { data: token, error: tokenError } = await supabase
       .from("hmrc_tokens")
@@ -65,7 +82,7 @@ export default async function handler(req, res) {
     let accessToken = token.access_token;
 
     // =========================
-    // 3️⃣ REFRESH TOKEN IF EXPIRED
+    // 4️⃣ REFRESH TOKEN IF EXPIRED
     // =========================
     const isExpired = new Date() >= new Date(token.expires_at);
 
@@ -109,12 +126,12 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 4️⃣ FRAUD HEADERS
+    // 5️⃣ FRAUD HEADERS
     // =========================
     const fraudHeaders = buildFraudHeaders(req, user_id);
 
     // =========================
-    // 5️⃣ SAFE TEST ENDPOINT (FIXED)
+    // 6️⃣ HMRC TEST CALL
     // =========================
     const url = `${HMRC_BASE}/individuals/details`;
 
@@ -131,9 +148,6 @@ export default async function handler(req, res) {
 
     const data = await hmrcResponse.json();
 
-    // =========================
-    // HANDLE HMRC ERRORS PROPERLY
-    // =========================
     if (!hmrcResponse.ok) {
       console.error("HMRC error:", data);
 
