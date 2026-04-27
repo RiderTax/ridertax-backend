@@ -1,24 +1,31 @@
 export default async function handler(req, res) {
   try {
-    // Get route from catch-all
-    const route = req.query.route || []
+    // Normalize route properly
+    let route = req.query.route
+
+    if (!route) {
+      route = []
+    }
+
+    if (!Array.isArray(route)) {
+      route = [route]
+    }
+
     const path = "/" + route.join("/")
 
     console.log("👉 HMRC ROUTE:", path)
 
     // ROOT → /api/hmrc
-    if (path === "/" || path === "") {
+    if (route.length === 0) {
       return res.status(200).send("HMRC API Root Working ✅")
     }
 
-    // /api/hmrc/logs
+    // /logs
     if (path === "/logs") {
-      return res.status(200).json({
-        logs: []
-      })
+      return res.status(200).json({ logs: [] })
     }
 
-    // /api/hmrc/submit
+    // /submit
     if (path === "/submit") {
       return res.status(200).json({
         success: true,
@@ -26,7 +33,7 @@ export default async function handler(req, res) {
       })
     }
 
-    // /api/hmrc/validate-headers
+    // /validate-headers
     if (path === "/validate-headers") {
       return res.status(200).json({
         success: false,
@@ -38,7 +45,7 @@ export default async function handler(req, res) {
       })
     }
 
-    // Fallback
+    // fallback
     return res.status(404).json({
       error: "Route not found",
       path
