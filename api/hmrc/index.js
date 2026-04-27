@@ -5,6 +5,7 @@ export const config = {
 import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
 
+// ✅ Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -12,17 +13,21 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   try {
-    const route = req.url.replace("/api/hmrc", "").split("?")[0];
+    const route = req.url || "/";
 
     console.log("👉 HMRC ROUTE:", route);
 
+    // ===============================
     // ✅ ROOT
-    if (route === "" || route === "/") {
+    // ===============================
+    if (route === "/" || route === "") {
       return res.status(200).send("HMRC API Root Working ✅");
     }
 
+    // ===============================
     // 🛡️ VALIDATE HEADERS
-    if (route === "/validate-headers") {
+    // ===============================
+    if (route.startsWith("/validate-headers")) {
       try {
         const fraudHeaders = {
           "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -32,7 +37,7 @@ export default async function handler(req, res) {
           "Gov-Client-Timezone": "UTC",
           "Gov-Vendor-Product-Name": "RiderTax",
           "Gov-Vendor-Version": "1.0.0",
-          Accept: "application/vnd.hmrc.1.0+json",
+          "Accept": "application/vnd.hmrc.1.0+json",
           "Content-Type": "application/json",
         };
 
@@ -55,20 +60,27 @@ export default async function handler(req, res) {
       }
     }
 
+    // ===============================
     // 📜 LOGS
-    if (route === "/logs") {
+    // ===============================
+    if (route.startsWith("/logs")) {
       const { data, error } = await supabase
         .from("hmrc_logs")
         .select("*")
         .limit(50)
         .order("created_at", { ascending: false });
 
-      if (error) return res.status(200).json({ logs: [] });
+      if (error) {
+        console.error("❌ LOG ERROR:", error);
+        return res.status(200).json({ logs: [] });
+      }
 
       return res.status(200).json({ logs: data || [] });
     }
 
-    // 🔄 REFRESH
+    // ===============================
+    // 🔄 REFRESH TOKEN
+    // ===============================
     if (route.startsWith("/refresh")) {
       const userId = route.split("/").pop();
 
@@ -107,14 +119,19 @@ export default async function handler(req, res) {
       return res.status(200).send("Token refreshed ✅");
     }
 
-    // 🚀 SUBMIT
-    if (route === "/submit") {
+    // ===============================
+    // 🚀 SUBMIT (placeholder)
+    // ===============================
+    if (route.startsWith("/submit")) {
       return res.status(200).json({
         success: true,
         message: "Submit endpoint reachable ✅",
       });
     }
 
+    // ===============================
+    // ❌ FALLBACK
+    // ===============================
     return res.status(404).send("Route not found");
 
   } catch (err) {
