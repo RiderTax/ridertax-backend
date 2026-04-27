@@ -1,6 +1,12 @@
 export default async function handler(req, res) {
   try {
-    const path = req.query.route ? "/" + req.query.route.join("/") : "/";
+    // ✅ FIXED ROUTING (handles all cases properly)
+    const route = req.query.route;
+    const path = Array.isArray(route)
+      ? "/" + route.join("/")
+      : route
+      ? "/" + route
+      : "/";
 
     console.log("👉 HMRC ROUTE:", path);
 
@@ -9,14 +15,14 @@ export default async function handler(req, res) {
       return res.status(200).send("HMRC API Root Working ✅");
     }
 
-    // LOGS
+    // LOGS (UNCHANGED)
     if (path === "/logs") {
       return res.status(200).json({
         logs: [],
       });
     }
 
-    // SUBMIT (TEST)
+    // SUBMIT (UNCHANGED)
     if (path === "/submit") {
       return res.status(200).json({
         success: true,
@@ -24,7 +30,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // VALIDATE HEADERS (NO HMRC CALL - LOCAL ONLY)
+    // VALIDATE HEADERS (UNCHANGED LOGIC)
     if (path === "/validate-headers") {
       const headers = {
         "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
