@@ -38,21 +38,24 @@ export default async function handler(req, res) {
     const { user_id } = body || {};
 
     console.log("Incoming body:", body);
+    console.log("USER ID RECEIVED:", user_id);
 
     if (!user_id) {
       return res.status(400).json({ error: "Missing user_id" });
     }
 
     // =========================
-    // 2️⃣ GET USER PROFILE (NINO FROM DB)
+    // 2️⃣ GET USER PROFILE (FIXED)
     // =========================
+    // 🔥 IMPORTANT: match Base44 user_id, NOT Supabase UUID
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
-      .eq("id", user_id)
+      .eq("user_id", user_id) // ✅ FIXED HERE
       .single();
 
     if (userError || !user) {
+      console.error("User lookup failed:", userError);
       return res.status(404).json({ error: "User not found" });
     }
 
