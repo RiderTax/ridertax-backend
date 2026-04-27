@@ -5,7 +5,6 @@ export const config = {
 import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
 
-// ✅ Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -13,21 +12,21 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   try {
-    const route = req.url || "/";
+    const route = req.url || "";
 
-    console.log("👉 HMRC ROUTE:", route);
+    console.log("👉 FULL ROUTE:", route);
 
     // ===============================
     // ✅ ROOT
     // ===============================
-    if (route === "/" || route === "") {
+    if (route === "/api/hmrc" || route === "/api/hmrc/") {
       return res.status(200).send("HMRC API Root Working ✅");
     }
 
     // ===============================
     // 🛡️ VALIDATE HEADERS
     // ===============================
-    if (route.startsWith("/validate-headers")) {
+    if (route.startsWith("/api/hmrc/validate-headers")) {
       try {
         const fraudHeaders = {
           "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
@@ -63,7 +62,7 @@ export default async function handler(req, res) {
     // ===============================
     // 📜 LOGS
     // ===============================
-    if (route.startsWith("/logs")) {
+    if (route.startsWith("/api/hmrc/logs")) {
       const { data, error } = await supabase
         .from("hmrc_logs")
         .select("*")
@@ -81,7 +80,7 @@ export default async function handler(req, res) {
     // ===============================
     // 🔄 REFRESH TOKEN
     // ===============================
-    if (route.startsWith("/refresh")) {
+    if (route.startsWith("/api/hmrc/refresh")) {
       const userId = route.split("/").pop();
 
       const { data } = await supabase
@@ -120,9 +119,9 @@ export default async function handler(req, res) {
     }
 
     // ===============================
-    // 🚀 SUBMIT (placeholder)
+    // 🚀 SUBMIT
     // ===============================
-    if (route.startsWith("/submit")) {
+    if (route.startsWith("/api/hmrc/submit")) {
       return res.status(200).json({
         success: true,
         message: "Submit endpoint reachable ✅",
