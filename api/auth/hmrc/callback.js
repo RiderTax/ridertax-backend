@@ -1,6 +1,5 @@
 import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
-import { buildFraudHeaders } from "../../hmrc/fraudHeaders";
 
 export default async function handler(req, res) {
   try {
@@ -8,7 +7,11 @@ export default async function handler(req, res) {
 
     console.log("🔁 HMRC CALLBACK HIT");
 
+    // =========================
+    // ❌ ERROR CHECK
+    // =========================
     if (error || !code || !state) {
+      console.error("❌ Missing code/state or error from HMRC");
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
 
@@ -28,6 +31,7 @@ export default async function handler(req, res) {
     const { user_id } = decoded;
 
     if (!user_id) {
+      console.error("❌ No user_id in state");
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
 
@@ -90,63 +94,72 @@ export default async function handler(req, res) {
     console.log("✅ Token stored");
 
     // =========================
-    // 👤 FETCH HMRC PROFILE
+    // 👤 FETCH HMRC PROFILE (SAFE)
     // =========================
     let userDetails = null;
 
     try {
-      const fraudHeaders = buildFraudHeaders(req, user_id);
-
       const profileRes = await axios.get(
         "https://test-api.service.hmrc.gov.uk/individuals/details",
         {
           headers: {
             Authorization: `Bearer ${tokens.access_token}`,
             Accept: "application/vnd.hmrc.1.0+json",
-            ...fraudHeaders,
           },
         }
       );
 
       userDetails = profileRes.data;
-      console.log("✅ HMRC Profile received:", userDetails);
+      console.log("✅ HMRC Profile received");
 
     } catch (e) {
       console.error(
-        "❌ HMRC PROFILE ERROR:",
+        "⚠️ HMRC PROFILE FAILED:",
         e.response?.data || e.message
       );
+
+      // ❗ Do NOT crash — fallback
+      userDetails = null;
     }
 
     // =========================
-    // 👤 SAVE USER (FIXED)
+    // 👤 UPSERT USER (FIXED)
     // =========================
-    await supabase.from("users").upsert(
-      {
-        id: user_id, // 🔥 FIXED: must match your table PK
-        full_name: userDetails?.name
-          ? `${userDetails.name.firstName || ""} ${userDetails.name.lastName || ""}`.trim()
-          : null,
-        dob: userDetails?.dateOfBirth || null,
-        address: userDetails?.address
-          ? `${userDetails.address.line1 || ""} ${userDetails.address.postcode || ""}`.trim()
-          : null,
-        onboarding_completed: true,
-      },
-      { onConflict: "id" } // 🔥 FIXED
-    );
+    const { error: userError } = await supabase
+      .from("users")
+      .upsert(
+        {
+          id: user_id, // 🔥 IMPORTANT (matches your DB)
+          full_name: userDetails?.name
+            ? `${userDetails.name.firstName || ""} ${userDetails.name.lastName || ""}`.trim()
+            : null,
+          dob: userDetails?.dateOfBirth || null,
+          address: userDetails?.address
+            ? `${userDetails.address.line1 || ""} ${userDetails.address.postcode || ""}`.trim()
+            : null,
+          onboarding_completed: true, // 🚀 KEY FIX
+        },
+        { onConflict: "id" }
+      );
 
-    console.log("✅ User synced to DB");
+    if (userError) {
+      console.error("❌ USER UPSERT ERROR:", userError);
+    } else {
+      console.log("✅ User updated & onboarding completed");
+    }
 
     // =========================
-    // 🚀 REDIRECT
+    // 🚀 REDIRECT SUCCESS
     // =========================
     return res.redirect(
       "https://ridertax.co.uk/settings?tab=hmrc&hmrc=connected"
     );
 
   } catch (err) {
-    console.error("💥 CALLBACK ERROR:", err.response?.data || err.message);
+    console.error(
+      "💥 CALLBACK ERROR:",
+      err.response?.data || err.message
+    );
 
     return res.redirect(
       "https://ridertax.co.uk/settings?hmrc=error"
