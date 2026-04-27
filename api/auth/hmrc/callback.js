@@ -1,16 +1,13 @@
 import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
+import { buildFraudHeaders } from "../../hmrc/fraudHeaders"; // ✅ ADD THIS
 
 export default async function handler(req, res) {
   try {
     const { code, error, state } = req.query;
 
     console.log("🔁 HMRC CALLBACK HIT");
-    console.log("Query:", req.query);
 
-    // =========================
-    // ❌ HANDLE ERRORS
-    // =========================
     if (error || !code || !state) {
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
@@ -24,11 +21,11 @@ export default async function handler(req, res) {
         Buffer.from(state, "base64").toString("utf-8")
       );
     } catch (e) {
-      console.error("❌ Failed to decode state:", e);
+      console.error("❌ State decode failed:", e);
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
 
-    const { user_id, ts } = decoded;
+    const { user_id } = decoded;
 
     if (!user_id) {
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
@@ -51,7 +48,7 @@ export default async function handler(req, res) {
     );
 
     // =========================
-    // 🔁 EXCHANGE TOKEN
+    // 🔁 TOKEN EXCHANGE
     // =========================
     const tokenResponse = await axios.post(
       "https://test-api.service.hmrc.gov.uk/oauth/token",
@@ -93,29 +90,36 @@ export default async function handler(req, res) {
     console.log("✅ Token stored");
 
     // =========================
-    // 👤 FETCH HMRC USER DATA
+    // 👤 FETCH HMRC PROFILE (FIXED)
     // =========================
     let userDetails = null;
 
     try {
+      const fraudHeaders = buildFraudHeaders(req, user_id); // ✅ REQUIRED
+
       const profileRes = await axios.get(
         "https://test-api.service.hmrc.gov.uk/individuals/details",
         {
           headers: {
             Authorization: `Bearer ${tokens.access_token}`,
             Accept: "application/vnd.hmrc.1.0+json",
+            ...fraudHeaders, // ✅ CRITICAL FIX
           },
         }
       );
 
       userDetails = profileRes.data;
-      console.log("✅ HMRC Profile:", userDetails);
+      console.log("✅ HMRC Profile received:", userDetails);
+
     } catch (e) {
-      console.warn("⚠️ Could not fetch HMRC profile");
+      console.error(
+        "❌ HMRC PROFILE ERROR:",
+        e.response?.data || e.message
+      );
     }
 
     // =========================
-    // 👤 SAVE USER (AUTO CREATE)
+    // 👤 SAVE USER
     // =========================
     await supabase.from("users").upsert(
       {
@@ -129,15 +133,13 @@ export default async function handler(req, res) {
           : null,
         onboarding_completed: true,
       },
-      {
-        onConflict: "user_id",
-      }
+      { onConflict: "user_id" }
     );
 
-    console.log("✅ User synced");
+    console.log("✅ User synced to DB");
 
     // =========================
-    // 🚀 REDIRECT TO HMRC TAB
+    // 🚀 REDIRECT
     // =========================
     return res.redirect(
       "https://ridertax.co.uk/settings?tab=hmrc&hmrc=connected"
