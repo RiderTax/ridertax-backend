@@ -1,6 +1,6 @@
 import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
-import { buildFraudHeaders } from "../../hmrc/fraudHeaders"; // ✅ ADD THIS
+import { buildFraudHeaders } from "../../hmrc/fraudHeaders";
 
 export default async function handler(req, res) {
   try {
@@ -90,12 +90,12 @@ export default async function handler(req, res) {
     console.log("✅ Token stored");
 
     // =========================
-    // 👤 FETCH HMRC PROFILE (FIXED)
+    // 👤 FETCH HMRC PROFILE
     // =========================
     let userDetails = null;
 
     try {
-      const fraudHeaders = buildFraudHeaders(req, user_id); // ✅ REQUIRED
+      const fraudHeaders = buildFraudHeaders(req, user_id);
 
       const profileRes = await axios.get(
         "https://test-api.service.hmrc.gov.uk/individuals/details",
@@ -103,7 +103,7 @@ export default async function handler(req, res) {
           headers: {
             Authorization: `Bearer ${tokens.access_token}`,
             Accept: "application/vnd.hmrc.1.0+json",
-            ...fraudHeaders, // ✅ CRITICAL FIX
+            ...fraudHeaders,
           },
         }
       );
@@ -119,11 +119,11 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 👤 SAVE USER
+    // 👤 SAVE USER (FIXED)
     // =========================
     await supabase.from("users").upsert(
       {
-        user_id,
+        id: user_id, // 🔥 FIXED: must match your table PK
         full_name: userDetails?.name
           ? `${userDetails.name.firstName || ""} ${userDetails.name.lastName || ""}`.trim()
           : null,
@@ -133,7 +133,7 @@ export default async function handler(req, res) {
           : null,
         onboarding_completed: true,
       },
-      { onConflict: "user_id" }
+      { onConflict: "id" } // 🔥 FIXED
     );
 
     console.log("✅ User synced to DB");
