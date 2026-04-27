@@ -11,26 +11,14 @@ export default async function handler(req, res) {
     // =========================
     // ❌ HANDLE ERRORS
     // =========================
-    if (error) {
-      console.error("❌ HMRC returned error:", error);
-      return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
-    }
-
-    if (!code) {
-      console.error("❌ Missing authorization code");
-      return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
-    }
-
-    if (!state || typeof state !== "string") {
-      console.error("❌ Missing or invalid state");
+    if (error || !code || !state) {
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
 
     // =========================
-    // 🔐 DECODE STATE (REAL USER)
+    // 🔐 DECODE STATE
     // =========================
     let decoded;
-
     try {
       decoded = JSON.parse(
         Buffer.from(state, "base64").toString("utf-8")
@@ -43,21 +31,11 @@ export default async function handler(req, res) {
     const { user_id, ts } = decoded;
 
     if (!user_id) {
-      console.error("❌ user_id missing in state");
       return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
     }
-
-    // ⏱ Optional expiry check (5 mins)
-    const FIVE_MIN = 5 * 60 * 1000;
-    if (ts && Date.now() - ts > FIVE_MIN) {
-      console.error("❌ State expired");
-      return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
-    }
-
-    console.log("✅ Using user_id:", user_id);
 
     // =========================
-    // 🔐 ENV VARIABLES
+    // 🔐 ENV
     // =========================
     const {
       HMRC_CLIENT_ID,
@@ -67,19 +45,14 @@ export default async function handler(req, res) {
       SUPABASE_SERVICE_ROLE_KEY,
     } = process.env;
 
-    if (!HMRC_CLIENT_ID || !HMRC_CLIENT_SECRET || !HMRC_REDIRECT_URI) {
-      throw new Error("Missing HMRC env variables");
-    }
-
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Missing Supabase env variables");
-    }
+    const supabase = createClient(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY
+    );
 
     // =========================
-    // 🔁 EXCHANGE CODE FOR TOKEN
+    // 🔁 EXCHANGE TOKEN
     // =========================
-    console.log("🔁 Exchanging code for token...");
-
     const tokenResponse = await axios.post(
       "https://test-api.service.hmrc.gov.uk/oauth/token",
       new URLSearchParams({
@@ -98,55 +71,80 @@ export default async function handler(req, res) {
 
     const tokens = tokenResponse.data;
 
-    console.log("✅ Token received:", {
-      access_token: tokens.access_token?.slice(0, 10),
-      expires_in: tokens.expires_in,
-    });
-
-    // =========================
-    // 🗄️ STORE IN SUPABASE
-    // =========================
-    const supabase = createClient(
-      SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY
-    );
-
     const expiresAt = new Date(
       Date.now() + tokens.expires_in * 1000
     ).toISOString();
 
-    const { error: dbError } = await supabase
-      .from("hmrc_tokens")
-      .upsert(
+    // =========================
+    // 💾 STORE TOKEN
+    // =========================
+    await supabase.from("hmrc_tokens").upsert(
+      {
+        user_id,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_type: tokens.token_type,
+        scope: tokens.scope || null,
+        expires_at: expiresAt,
+      },
+      { onConflict: "user_id" }
+    );
+
+    console.log("✅ Token stored");
+
+    // =========================
+    // 👤 FETCH HMRC USER DATA
+    // =========================
+    let userDetails = null;
+
+    try {
+      const profileRes = await axios.get(
+        "https://test-api.service.hmrc.gov.uk/individuals/details",
         {
-          user_id,
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token,
-          token_type: tokens.token_type,
-          scope: tokens.scope || null,
-          expires_at: expiresAt,
-        },
-        {
-          onConflict: "user_id",
+          headers: {
+            Authorization: `Bearer ${tokens.access_token}`,
+            Accept: "application/vnd.hmrc.1.0+json",
+          },
         }
       );
 
-    if (dbError) {
-      console.error("❌ Supabase error:", dbError);
-      return res.redirect("https://ridertax.co.uk/settings?hmrc=error");
+      userDetails = profileRes.data;
+      console.log("✅ HMRC Profile:", userDetails);
+    } catch (e) {
+      console.warn("⚠️ Could not fetch HMRC profile");
     }
 
-    console.log("✅ Token stored successfully for user:", user_id);
+    // =========================
+    // 👤 SAVE USER (AUTO CREATE)
+    // =========================
+    await supabase.from("users").upsert(
+      {
+        user_id,
+        full_name: userDetails?.name
+          ? `${userDetails.name.firstName || ""} ${userDetails.name.lastName || ""}`.trim()
+          : null,
+        dob: userDetails?.dateOfBirth || null,
+        address: userDetails?.address
+          ? `${userDetails.address.line1 || ""} ${userDetails.address.postcode || ""}`.trim()
+          : null,
+        onboarding_completed: true,
+      },
+      {
+        onConflict: "user_id",
+      }
+    );
+
+    console.log("✅ User synced");
 
     // =========================
-    // 🚀 SUCCESS REDIRECT
+    // 🚀 REDIRECT TO HMRC TAB
     // =========================
     return res.redirect(
-      "https://ridertax.co.uk/settings?hmrc=connected"
+      "https://ridertax.co.uk/settings?tab=hmrc&hmrc=connected"
     );
 
   } catch (err) {
-    console.error("💥 CALLBACK CRASH:", err.response?.data || err.message);
+    console.error("💥 CALLBACK ERROR:", err.response?.data || err.message);
 
     return res.redirect(
       "https://ridertax.co.uk/settings?hmrc=error"
