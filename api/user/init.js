@@ -25,26 +25,28 @@ export default async function handler(req, res) {
 
     const { user_id } = body;
 
-    console.log("INIT USER ID:", user_id);
+    console.log("INIT USER:", user_id);
 
     if (!user_id) {
       return res.status(400).json({ error: "Missing user_id" });
     }
 
-    // 🔍 CHECK USER
-    const { data: existingUser, error: fetchError } = await supabase
+    // ✅ SAFE QUERY (NO CRASH)
+    const { data: users, error } = await supabase
       .from("users")
       .select("*")
-      .eq("id", user_id)
-      .maybeSingle();
+      .eq("id", user_id);
 
-    if (fetchError) {
-      console.error("FETCH ERROR:", fetchError);
-      return res.status(500).json({ error: fetchError.message });
+    if (error) {
+      console.error("FETCH ERROR:", error);
+      return res.status(500).json({ error: error.message });
     }
 
+    const existingUser = users[0];
+
+    // 🆕 CREATE USER
     if (!existingUser) {
-      console.log("🆕 Creating user...");
+      console.log("Creating new user...");
 
       const { error: insertError } = await supabase
         .from("users")
@@ -57,9 +59,7 @@ export default async function handler(req, res) {
 
       if (insertError) {
         console.error("INSERT ERROR:", insertError);
-        return res.status(500).json({
-          error: insertError.message,
-        });
+        return res.status(500).json({ error: insertError.message });
       }
 
       return res.status(200).json({
@@ -67,7 +67,8 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log("👤 User exists");
+    // 👤 EXISTING USER
+    console.log("User exists");
 
     return res.status(200).json({
       onboarding_completed: existingUser.onboarding_completed,
@@ -75,8 +76,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error("CRASH:", err);
-    return res.status(500).json({
-      error: err.message,
-    });
+    return res.status(500).json({ error: err.message });
   }
 }
