@@ -1,12 +1,12 @@
 export function applyCors(req, res) {
   res.setHeader(
     "Access-Control-Allow-Origin",
-    "https://ridertax.co.uk"
+    process.env.FRONTEND_URL
   );
 
   res.setHeader(
     "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, OPTIONS"
+    "GET,POST,OPTIONS"
   );
 
   res.setHeader(
@@ -14,10 +14,9 @@ export function applyCors(req, res) {
     "Content-Type, Authorization"
   );
 
-  // ✅ Handle preflight globally
   if (req.method === "OPTIONS") {
     res.status(200).end();
-    return true; // stop execution
+    return true;
   }
 
   return false;
