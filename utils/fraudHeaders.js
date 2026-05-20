@@ -1,61 +1,47 @@
 import crypto from "crypto";
 
-function hash(value) {
-  return crypto.createHash("sha256").update(value).digest("hex");
-}
-
-function getPublicIP(req) {
-  return (
-    req.headers["x-forwarded-for"]?.split(",")[0] ||
-    req.socket?.remoteAddress ||
-    "127.0.0.1"
-  );
-}
-
-export function buildFraudHeaders(req, user_id) {
-  // ✅ STABLE device ID (CRITICAL FIX)
-  const deviceId = crypto.randomUUID();
-
-  const publicIP = getPublicIP(req);
-  const timestamp = new Date().toISOString();
-
+export function buildFraudHeaders(req) {
   return {
-    // ✅ REQUIRED
-    "Gov-Client-Connection-Method": "WEB_APP_VIA_SERVER",
+    "Gov-Client-Connection-Method":
+      "WEB_APP_VIA_SERVER",
 
-    // ✅ STABLE IDENTIFIERS
-    "Gov-Client-Device-ID": deviceId,
-    "Gov-Client-User-IDs": `device=${deviceId}`,
+    "Gov-Client-Device-ID":
+      crypto.randomUUID(),
 
-    // ✅ NETWORK INFO
-    "Gov-Client-Public-IP": publicIP,
-    "Gov-Client-Public-IP-Timestamp": timestamp,
-    "Gov-Client-Local-IPs": "127.0.0.1",
-    "Gov-Client-Local-IPs-Timestamp": timestamp,
-    "Gov-Client-Public-Port": "12345",
+    "Gov-Client-User-Agent":
+      req.headers["user-agent"] || "unknown",
 
-    // ✅ DEVICE INFO
-    "Gov-Client-Timezone": "UTC+05:30",
-    "Gov-Client-Window-Size": "width=1200&height=800",
+    "Gov-Client-Timezone":
+      "Europe/London",
 
-    // ✅ SCREENS (VALID FORMAT — YOU FIXED THIS 👍)
+    "Gov-Client-Local-IPs":
+      "127.0.0.1",
+
     "Gov-Client-Screens":
-      "width=1920&height=1080&colour-depth=24&scaling-factor=1",
+      "width=1920&height=1080&scaling-factor=1&colour-depth=24",
 
-    // ✅ BROWSER INFO
+    "Gov-Client-Window-Size":
+      "width=1920&height=1080",
+
+    "Gov-Client-Browser-Plugins":
+      "none",
+
     "Gov-Client-Browser-JS-User-Agent":
-      req.headers["user-agent"] || "Mozilla/5.0",
-    "Gov-Client-Browser-Do-Not-Track": "false",
+      req.headers["user-agent"] || "unknown",
 
-    // ✅ MFA (ENCODED CORRECTLY)
-    "Gov-Client-Multi-Factor":
-      `type=OTHER&timestamp=${encodeURIComponent(timestamp)}&unique-reference=${encodeURIComponent(deviceId)}`,
+    "Gov-Client-Public-Port":
+      "443",
 
-    // ✅ VENDOR INFO
-    "Gov-Vendor-Product-Name": "RiderTax",
-    "Gov-Vendor-Version": "RiderTax=1.0.0",
-    "Gov-Vendor-License-IDs": `licenseId=${hash("RiderTax")}`,
-    "Gov-Vendor-Public-IP": publicIP,
-    "Gov-Vendor-Forwarded": `by=${publicIP}&for=${publicIP}`,
+    "Gov-Client-Public-IP":
+      req.headers["x-forwarded-for"] || "127.0.0.1",
+
+    "Gov-Vendor-Version":
+      "RiderTax=2.0.0",
+
+    "Gov-Vendor-License-IDs":
+      "RiderTax=MTD",
+
+    "Gov-Client-MAC-Addresses":
+      "00:00:5e:00:53:af"
   };
 }
