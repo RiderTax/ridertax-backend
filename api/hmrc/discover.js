@@ -17,12 +17,15 @@ export default async function handler(
 ) {
 
   // =========================
-  // CORS FIX
+  // CORS
   // =========================
   if (applyCors(req, res)) return;
 
   try {
 
+    // =========================
+    // METHOD CHECK
+    // =========================
     if (req.method !== "POST") {
       return res.status(405).json({
         success: false,
@@ -30,7 +33,20 @@ export default async function handler(
       });
     }
 
-    const { user_id } = req.body;
+    // =========================
+    // BODY
+    // =========================
+    const body =
+      typeof req.body === "string"
+        ? JSON.parse(req.body)
+        : req.body;
+
+    console.log(
+      "DISCOVER BODY:",
+      JSON.stringify(body, null, 2)
+    );
+
+    const { user_id } = body;
 
     if (!user_id) {
       return res.status(400).json({
@@ -52,6 +68,12 @@ export default async function handler(
       .maybeSingle();
 
     if (tokenError || !tokenRow) {
+
+      console.error(
+        "TOKEN ERROR:",
+        tokenError
+      );
+
       return res.status(404).json({
         success: false,
         error:
@@ -59,8 +81,12 @@ export default async function handler(
       });
     }
 
+    console.log(
+      "TOKEN FOUND"
+    );
+
     // =========================
-    // HMRC API
+    // HMRC API CALL
     // =========================
     const response =
       await axios.get(
@@ -76,6 +102,9 @@ export default async function handler(
         }
       );
 
+    // =========================
+    // DEBUG FULL RESPONSE
+    // =========================
     console.log(
       "FULL HMRC RESPONSE:"
     );
@@ -88,23 +117,50 @@ export default async function handler(
       )
     );
 
+    // =========================
+    // SUPPORT MULTIPLE HMRC FORMATS
+    // =========================
     const source =
       response.data
-        ?.businesses?.[0];
+        ?.selfEmployment?.[0] ||
+
+      response.data
+        ?.businesses?.[0] ||
+
+      response.data
+        ?.incomeSources?.[0];
+
+    console.log(
+      "SELECTED SOURCE:"
+    );
+
+    console.log(
+      JSON.stringify(
+        source,
+        null,
+        2
+      )
+    );
 
     if (!source) {
+
       return res.status(404).json({
         success: false,
         error:
           "No HMRC business found",
+        hmrc_response:
+          response.data,
       });
     }
 
     // =========================
-    // IMPORTANT
+    // FLEXIBLE ID SUPPORT
     // =========================
     const incomeSourceId =
-      source.incomeSourceId;
+      source.incomeSourceId ||
+      source.id ||
+      source.incomeSource ||
+      source.businessId;
 
     console.log(
       "REAL HMRC BUSINESS ID:",
@@ -112,17 +168,29 @@ export default async function handler(
     );
 
     if (!incomeSourceId) {
+
       return res.status(400).json({
         success: false,
         error:
           "incomeSourceId missing",
+        source,
       });
     }
 
     // =========================
-    // SAVE
+    // BUSINESS NAME
     // =========================
-    await supabase
+    const businessName =
+      source.businessName ||
+      source.name ||
+      "HMRC Business";
+
+    // =========================
+    // SAVE TO SUPABASE
+    // =========================
+    const {
+      error: saveError,
+    } = await supabase
       .from("hmrc_profiles")
       .upsert({
         user_id,
@@ -131,13 +199,38 @@ export default async function handler(
           incomeSourceId,
       });
 
+    if (saveError) {
+
+      console.error(
+        "SAVE ERROR:",
+        saveError
+      );
+
+      return res.status(500).json({
+        success: false,
+        error:
+          "Failed to save HMRC profile",
+        saveError,
+      });
+    }
+
+    console.log(
+      "PROFILE SAVED"
+    );
+
+    // =========================
+    // SUCCESS
+    // =========================
     return res.status(200).json({
       success: true,
 
       hmrc_business_id:
         incomeSourceId,
 
-      source,
+      source: {
+        ...source,
+        businessName,
+      },
     });
 
   } catch (err) {
@@ -158,7 +251,8 @@ export default async function handler(
 
       error:
         err?.response?.data ||
-        err.message,
+        err.message ||
+        "Discovery failed",
     });
   }
 }
