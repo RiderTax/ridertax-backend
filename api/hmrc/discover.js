@@ -1,15 +1,32 @@
 import axios from "axios";
-
-import { createClient }
-from "@supabase/supabase-js";
-
-import { applyCors }
-from "../../utils/cors.js";
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+function applyCors(res) {
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "*"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,OPTIONS"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+
+  res.setHeader(
+    "Access-Control-Max-Age",
+    "86400"
+  );
+}
 
 export default async function handler(
   req,
@@ -17,9 +34,16 @@ export default async function handler(
 ) {
 
   // =========================
-  // CORS
+  // ALWAYS APPLY CORS
   // =========================
-  if (applyCors(req, res)) return;
+  applyCors(res);
+
+  // =========================
+  // HANDLE PREFLIGHT
+  // =========================
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   try {
 
@@ -34,7 +58,7 @@ export default async function handler(
     }
 
     // =========================
-    // BODY
+    // SAFE BODY PARSE
     // =========================
     const body =
       typeof req.body === "string"
@@ -46,7 +70,7 @@ export default async function handler(
       JSON.stringify(body, null, 2)
     );
 
-    const { user_id } = body;
+    const { user_id } = body || {};
 
     if (!user_id) {
       return res.status(400).json({
@@ -56,7 +80,7 @@ export default async function handler(
     }
 
     // =========================
-    // GET TOKEN
+    // GET HMRC TOKEN
     // =========================
     const {
       data: tokenRow,
@@ -81,14 +105,12 @@ export default async function handler(
       });
     }
 
-    console.log(
-      "TOKEN FOUND"
-    );
+    console.log("TOKEN FOUND");
 
     // =========================
     // HMRC API CALL
     // =========================
-    const response =
+    const hmrcResponse =
       await axios.get(
         `${process.env.HMRC_BASE_URL}/income-tax-mtd/income-sources`,
         {
@@ -99,36 +121,38 @@ export default async function handler(
             Accept:
               "application/vnd.hmrc.1.0+json",
           },
+
+          timeout: 30000,
         }
       );
 
-    // =========================
-    // DEBUG FULL RESPONSE
-    // =========================
     console.log(
       "FULL HMRC RESPONSE:"
     );
 
     console.log(
       JSON.stringify(
-        response.data,
+        hmrcResponse.data,
         null,
         2
       )
     );
 
     // =========================
-    // SUPPORT MULTIPLE HMRC FORMATS
+    // SUPPORT MULTIPLE FORMATS
     // =========================
     const source =
-      response.data
+      hmrcResponse.data
         ?.selfEmployment?.[0] ||
 
-      response.data
+      hmrcResponse.data
         ?.businesses?.[0] ||
 
-      response.data
-        ?.incomeSources?.[0];
+      hmrcResponse.data
+        ?.incomeSources?.[0] ||
+
+      hmrcResponse.data
+        ?.properties?.[0];
 
     console.log(
       "SELECTED SOURCE:"
@@ -149,18 +173,19 @@ export default async function handler(
         error:
           "No HMRC business found",
         hmrc_response:
-          response.data,
+          hmrcResponse.data,
       });
     }
 
     // =========================
-    // FLEXIBLE ID SUPPORT
+    // FLEXIBLE ID EXTRACTION
     // =========================
     const incomeSourceId =
       source.incomeSourceId ||
       source.id ||
       source.incomeSource ||
-      source.businessId;
+      source.businessId ||
+      source.sourceId;
 
     console.log(
       "REAL HMRC BUSINESS ID:",
@@ -183,6 +208,7 @@ export default async function handler(
     const businessName =
       source.businessName ||
       source.name ||
+      source.tradingName ||
       "HMRC Business";
 
     // =========================
