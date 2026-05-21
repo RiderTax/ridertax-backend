@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // ✅ CHECK IF TOKEN STILL VALID
+    // ✅ CHECK TOKEN VALIDITY
     // =========================
     const now = new Date();
     const expiry = new Date(tokenRow.expires_at);
@@ -91,7 +91,7 @@ export default async function handler(req, res) {
     // ✅ REFRESH TOKEN REQUEST
     // =========================
     const tokenResponse = await axios.post(
-      `${process.env.HMRC_BASE_URL}/oauth/token`,
+      process.env.HMRC_TOKEN_URL,
       new URLSearchParams({
         grant_type: "refresh_token",
         client_id: process.env.HMRC_CLIENT_ID,
@@ -100,7 +100,8 @@ export default async function handler(req, res) {
       }),
       {
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Type":
+            "application/x-www-form-urlencoded",
         },
       }
     );
@@ -139,6 +140,18 @@ export default async function handler(req, res) {
     }
 
     // =========================
+    // ✅ AUDIT LOG
+    // =========================
+    await supabase
+      .from("hmrc_logs")
+      .insert({
+        user_id,
+        action: "token_refresh",
+        status: "success",
+        created_at: new Date().toISOString(),
+      });
+
+    // =========================
     // ✅ SUCCESS RESPONSE
     // =========================
     return res.status(200).json({
@@ -153,6 +166,37 @@ export default async function handler(req, res) {
       "💥 REFRESH ERROR:",
       err?.response?.data || err.message
     );
+
+    // =========================
+    // ❌ INVALID REFRESH TOKEN
+    // =========================
+    if (
+      err?.response?.data?.error === "invalid_grant"
+    ) {
+      try {
+        const { user_id } = req.body;
+
+        await supabase
+          .from("hmrc_tokens")
+          .delete()
+          .eq("user_id", user_id);
+
+        await supabase
+          .from("hmrc_logs")
+          .insert({
+            user_id,
+            action: "token_refresh",
+            status: "failed_invalid_grant",
+            created_at: new Date().toISOString(),
+          });
+
+      } catch (cleanupError) {
+        console.error(
+          "❌ CLEANUP ERROR:",
+          cleanupError
+        );
+      }
+    }
 
     return res.status(500).json({
       success: false,
