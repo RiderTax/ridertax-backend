@@ -1,77 +1,170 @@
 import { createClient } from "@supabase/supabase-js";
 
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
 export default async function handler(req, res) {
   try {
-    // ✅ CORS (important for frontend)
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    // =========================
+    // ✅ CORS
+    // =========================
+    res.setHeader(
+      "Access-Control-Allow-Origin",
+      "*"
+    );
+
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, OPTIONS"
+    );
+
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type"
+    );
 
     if (req.method === "OPTIONS") {
       return res.status(200).end();
     }
 
-    const { user_id } = req.body;
-
-    if (!user_id) {
-      return res.status(400).json({ error: "Missing user_id" });
+    // =========================
+    // ✅ ONLY ALLOW POST
+    // =========================
+    if (req.method !== "POST") {
+      return res.status(405).json({
+        error: "Method not allowed",
+      });
     }
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    // =========================
+    // ✅ PARSE BODY SAFELY
+    // =========================
+    const body =
+      typeof req.body === "string"
+        ? JSON.parse(req.body)
+        : req.body;
+
+    const {
+      user_id,
+      email,
+      full_name,
+    } = body || {};
+
+    if (!user_id) {
+      return res.status(400).json({
+        error: "Missing user_id",
+      });
+    }
 
     console.log("🔍 INIT USER:", user_id);
 
     // =========================
-    // 🔎 CHECK USER
+    // 🔎 CHECK EXISTING USER
     // =========================
-    const { data: user, error } = await supabase
+    const {
+      data: existingUser,
+      error: lookupError,
+    } = await supabase
       .from("users")
       .select("*")
       .eq("id", user_id)
       .maybeSingle();
 
-    if (error) {
-      console.error("❌ DB ERROR:", error);
-      return res.status(500).json({ error: "DB error" });
+    if (lookupError) {
+      console.error(
+        "❌ USER LOOKUP ERROR:",
+        lookupError
+      );
+
+      return res.status(500).json({
+        error: "Database lookup failed",
+      });
     }
 
     // =========================
-    // 🆕 CREATE USER IF NOT EXISTS
+    // 🆕 AUTO CREATE USER
     // =========================
-    if (!user) {
-      console.log("🆕 USER NOT FOUND → CREATING (SKIP ONBOARDING)");
+    if (!existingUser) {
+      console.log(
+        "🆕 USER NOT FOUND → AUTO CREATING"
+      );
 
-      const { error: insertError } = await supabase
+      const newUser = {
+        id: user_id,
+
+        email:
+          email || null,
+
+        full_name:
+          full_name || null,
+
+        onboarding_completed: true,
+
+        created_at:
+          new Date().toISOString(),
+      };
+
+      const {
+        data: insertedUser,
+        error: upsertError,
+      } = await supabase
         .from("users")
-        .insert({
-          id: user_id,
-          onboarding_completed: true, // 🔥 THIS IS THE MAGIC
-        });
+        .upsert(newUser)
+        .select()
+        .single();
 
-      if (insertError) {
-        console.error("❌ INSERT ERROR:", insertError);
-        return res.status(500).json({ error: "Insert failed" });
+      if (upsertError) {
+        console.error(
+          "❌ USER CREATE ERROR:",
+          upsertError
+        );
+
+        return res.status(500).json({
+          error: "Failed to create user",
+        });
       }
 
+      console.log(
+        "✅ USER AUTO CREATED:",
+        insertedUser.id
+      );
+
       return res.status(200).json({
+        success: true,
+
         onboarding_completed: true,
+
+        user: insertedUser,
       });
     }
 
     // =========================
     // ✅ EXISTING USER
     // =========================
-    console.log("✅ USER FOUND:", user);
+    console.log(
+      "✅ EXISTING USER:",
+      existingUser.id
+    );
 
     return res.status(200).json({
-      onboarding_completed: user.onboarding_completed ?? true,
+      success: true,
+
+      onboarding_completed:
+        existingUser.onboarding_completed ?? true,
+
+      user: existingUser,
     });
 
-  } catch (err) {
-    console.error("💥 INIT ERROR:", err);
-    return res.status(500).json({ error: "Server error" });
+  } catch (error) {
+    console.error(
+      "💥 INIT USER ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      error: "Internal server error",
+    });
   }
 }
