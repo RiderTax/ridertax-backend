@@ -1,5 +1,6 @@
 import axios from "axios";
 import { createClient } from "@supabase/supabase-js";
+import { logHmrcEvent } from "../../utils/logHmrcEvent.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -11,9 +12,20 @@ export default async function handler(req, res) {
     // =========================
     // ✅ CORS
     // =========================
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader(
+      "Access-Control-Allow-Origin",
+      "*"
+    );
+
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, OPTIONS"
+    );
+
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type"
+    );
 
     if (req.method === "OPTIONS") {
       return res.status(200).end();
@@ -38,19 +50,37 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log("🔄 REFRESH START:", user_id);
+    console.log(
+      "🔄 REFRESH START:",
+      user_id
+    );
 
     // =========================
     // ✅ GET EXISTING TOKENS
     // =========================
-    const { data: tokenRow, error: tokenError } = await supabase
+    const {
+      data: tokenRow,
+      error: tokenError,
+    } = await supabase
       .from("hmrc_tokens")
       .select("*")
       .eq("user_id", user_id)
       .maybeSingle();
 
     if (tokenError) {
-      console.error("❌ TOKEN FETCH ERROR:", tokenError);
+      console.error(
+        "❌ TOKEN FETCH ERROR:",
+        tokenError
+      );
+
+      await logHmrcEvent({
+        user_id,
+        endpoint: "/oauth/token",
+        method: "POST",
+        response_status: 500,
+        error_message:
+          tokenError.message,
+      });
 
       return res.status(500).json({
         success: false,
@@ -61,7 +91,8 @@ export default async function handler(req, res) {
     if (!tokenRow) {
       return res.status(404).json({
         success: false,
-        error: "No HMRC connection found",
+        error:
+          "No HMRC connection found",
       });
     }
 
@@ -69,87 +100,143 @@ export default async function handler(req, res) {
     // ✅ CHECK TOKEN VALIDITY
     // =========================
     const now = new Date();
-    const expiry = new Date(tokenRow.expires_at);
+
+    const expiry = new Date(
+      tokenRow.expires_at
+    );
 
     // 5 minute safety buffer
-    const fiveMinutes = 5 * 60 * 1000;
+    const fiveMinutes =
+      5 * 60 * 1000;
 
-    if (expiry.getTime() - now.getTime() > fiveMinutes) {
-      console.log("✅ TOKEN STILL VALID");
+    if (
+      expiry.getTime() -
+        now.getTime() >
+      fiveMinutes
+    ) {
+      console.log(
+        "✅ TOKEN STILL VALID"
+      );
 
       return res.status(200).json({
         success: true,
         refreshed: false,
-        access_token: tokenRow.access_token,
-        expires_at: tokenRow.expires_at,
+        access_token:
+          tokenRow.access_token,
+        expires_at:
+          tokenRow.expires_at,
       });
     }
 
-    console.log("⚠️ TOKEN EXPIRED → REFRESHING");
+    console.log(
+      "⚠️ TOKEN EXPIRED → REFRESHING"
+    );
 
     // =========================
     // ✅ REFRESH TOKEN REQUEST
     // =========================
-    const tokenResponse = await axios.post(
-      process.env.HMRC_TOKEN_URL,
-      new URLSearchParams({
-        grant_type: "refresh_token",
-        client_id: process.env.HMRC_CLIENT_ID,
-        client_secret: process.env.HMRC_CLIENT_SECRET,
-        refresh_token: tokenRow.refresh_token,
-      }),
-      {
-        headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded",
-        },
-      }
+    const tokenResponse =
+      await axios.post(
+        process.env.HMRC_TOKEN_URL,
+
+        new URLSearchParams({
+          grant_type:
+            "refresh_token",
+
+          client_id:
+            process.env.HMRC_CLIENT_ID,
+
+          client_secret:
+            process.env
+              .HMRC_CLIENT_SECRET,
+
+          refresh_token:
+            tokenRow.refresh_token,
+        }),
+
+        {
+          headers: {
+            "Content-Type":
+              "application/x-www-form-urlencoded",
+          },
+        }
+      );
+
+    const tokens =
+      tokenResponse.data;
+
+    console.log(
+      "✅ TOKEN REFRESH SUCCESS"
     );
-
-    const tokens = tokenResponse.data;
-
-    console.log("✅ TOKEN REFRESH SUCCESS");
 
     // =========================
     // ✅ CALCULATE NEW EXPIRY
     // =========================
     const expiresAt = new Date(
-      Date.now() + tokens.expires_in * 1000
+      Date.now() +
+        tokens.expires_in * 1000
     ).toISOString();
 
     // =========================
     // ✅ UPDATE DATABASE
     // =========================
-    const { error: updateError } = await supabase
+    const {
+      error: updateError,
+    } = await supabase
       .from("hmrc_tokens")
       .update({
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
+        access_token:
+          tokens.access_token,
+
+        refresh_token:
+          tokens.refresh_token,
+
         expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
+
+        updated_at:
+          new Date().toISOString(),
       })
       .eq("user_id", user_id);
 
     if (updateError) {
-      console.error("❌ UPDATE ERROR:", updateError);
+      console.error(
+        "❌ UPDATE ERROR:",
+        updateError
+      );
+
+      await logHmrcEvent({
+        user_id,
+        endpoint: "/oauth/token",
+        method: "POST",
+        response_status: 500,
+        error_message:
+          updateError.message,
+      });
 
       return res.status(500).json({
         success: false,
-        error: "Failed to update tokens",
+        error:
+          "Failed to update tokens",
       });
     }
 
     // =========================
     // ✅ AUDIT LOG
     // =========================
-    await supabase
-      .from("hmrc_logs")
-      .insert({
-        user_id,
-        action: "token_refresh",
-        status: "success",
-        created_at: new Date().toISOString(),
-      });
+    await logHmrcEvent({
+      user_id,
+
+      endpoint: "/oauth/token",
+
+      method: "POST",
+
+      response_status: 200,
+
+      response_body: {
+        refreshed: true,
+        expires_at: expiresAt,
+      },
+    });
 
     // =========================
     // ✅ SUCCESS RESPONSE
@@ -157,38 +244,33 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       refreshed: true,
-      access_token: tokens.access_token,
+      access_token:
+        tokens.access_token,
       expires_at: expiresAt,
     });
 
   } catch (err) {
     console.error(
       "💥 REFRESH ERROR:",
-      err?.response?.data || err.message
+      err?.response?.data ||
+        err.message
     );
 
     // =========================
     // ❌ INVALID REFRESH TOKEN
     // =========================
     if (
-      err?.response?.data?.error === "invalid_grant"
+      err?.response?.data?.error ===
+      "invalid_grant"
     ) {
       try {
-        const { user_id } = req.body;
+        const { user_id } =
+          req.body;
 
         await supabase
           .from("hmrc_tokens")
           .delete()
           .eq("user_id", user_id);
-
-        await supabase
-          .from("hmrc_logs")
-          .insert({
-            user_id,
-            action: "token_refresh",
-            status: "failed_invalid_grant",
-            created_at: new Date().toISOString(),
-          });
 
       } catch (cleanupError) {
         console.error(
@@ -198,8 +280,32 @@ export default async function handler(req, res) {
       }
     }
 
+    // =========================
+    // ✅ AUDIT ERROR LOG
+    // =========================
+    await logHmrcEvent({
+      user_id:
+        req.body?.user_id,
+
+      endpoint: "/oauth/token",
+
+      method: "POST",
+
+      response_status:
+        err?.response?.status ||
+        500,
+
+      response_body:
+        err?.response?.data ||
+        {},
+
+      error_message:
+        err.message,
+    });
+
     return res.status(500).json({
       success: false,
+
       error:
         err?.response?.data ||
         err.message ||
