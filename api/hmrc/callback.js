@@ -107,10 +107,10 @@ export default async function handler(req, res) {
     console.log("✅ HMRC TOKENS SAVED");
 
     // =========================
-    // REDIRECT BACK TO APP
+    // REDIRECT BACK TO SETTINGS
     // =========================
     return res.redirect(
-      `https://ridertax.co.uk/Dashboard?hmrc=connected`
+      `https://ridertax.co.uk/Settings?tab=hmrc&connected=true`
     );
 
   } catch (err) {
