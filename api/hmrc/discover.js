@@ -6,7 +6,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// =========================
+// GLOBAL CORS
+// =========================
 function applyCors(res) {
+
   res.setHeader(
     "Access-Control-Allow-Origin",
     "*"
@@ -19,7 +23,14 @@ function applyCors(res) {
 
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
+    [
+      "Content-Type",
+      "Authorization",
+      "Cache-Control",
+      "Pragma",
+      "Expires",
+      "X-Requested-With"
+    ].join(", ")
   );
 
   res.setHeader(
@@ -39,7 +50,7 @@ export default async function handler(
   applyCors(res);
 
   // =========================
-  // HANDLE PREFLIGHT
+  // PREFLIGHT
   // =========================
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -139,7 +150,7 @@ export default async function handler(
     );
 
     // =========================
-    // SUPPORT MULTIPLE FORMATS
+    // SUPPORT MULTIPLE HMRC FORMATS
     // =========================
     const source =
       hmrcResponse.data
@@ -220,7 +231,6 @@ export default async function handler(
       .from("hmrc_profiles")
       .upsert({
         user_id,
-
         hmrc_business_id:
           incomeSourceId,
       });
