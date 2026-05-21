@@ -20,22 +20,18 @@ function formatMoney(value) {
 
 function buildHmrcPayload(rawPayload) {
 
-  const income =
-    formatMoney(
-      rawPayload?.income ||
-      rawPayload?.turnover ||
-      0
-    );
+  const income = formatMoney(
+    rawPayload?.income ||
+    rawPayload?.turnover ||
+    0
+  );
 
-  const expenses =
-    formatMoney(
-      rawPayload?.expenses ||
-      rawPayload?.consolidatedExpenses ||
-      0
-    );
+  const expenses = formatMoney(
+    rawPayload?.expenses ||
+    rawPayload?.consolidatedExpenses ||
+    0
+  );
 
-  // HMRC quarterly periods
-  // adjust later dynamically
   const periodFrom =
     rawPayload?.periodFrom ||
     "2026-04-06";
@@ -77,12 +73,57 @@ export default async function handler(
       });
     }
 
+    console.log(
+      "📦 RAW BODY:",
+      JSON.stringify(req.body, null, 2)
+    );
+
+    // =====================================
+    // SAFE BODY PARSE
+    // =====================================
+    const body =
+      typeof req.body === "string"
+        ? JSON.parse(req.body)
+        : req.body;
+
+    // =====================================
+    // SUPPORT BOTH OLD + NEW STRUCTURE
+    // =====================================
     const {
       user_id,
       tax_year,
       hmrc_business_id,
       payload,
-    } = req.body;
+      income,
+      expenses,
+      turnover,
+      consolidatedExpenses,
+      periodFrom,
+      periodTo,
+    } = body;
+
+    // =====================================
+    // AUTO BUILD PAYLOAD IF FRONTEND
+    // SENDS DIRECT VALUES
+    // =====================================
+    const effectivePayload =
+      payload || {
+        income,
+        expenses,
+        turnover,
+        consolidatedExpenses,
+        periodFrom,
+        periodTo,
+      };
+
+    console.log(
+      "📨 EFFECTIVE PAYLOAD:",
+      JSON.stringify(
+        effectivePayload,
+        null,
+        2
+      )
+    );
 
     // =========================
     // VALIDATION
@@ -101,7 +142,7 @@ export default async function handler(
       });
     }
 
-    if (!payload) {
+    if (!effectivePayload) {
       return res.status(400).json({
         success: false,
         error: "Missing payload",
@@ -263,7 +304,9 @@ export default async function handler(
     // BUILD HMRC PAYLOAD
     // =========================
     const hmrcPayload =
-      buildHmrcPayload(payload);
+      buildHmrcPayload(
+        effectivePayload
+      );
 
     console.log(
       "[HMRC] FINAL PAYLOAD:"
@@ -331,10 +374,6 @@ export default async function handler(
 
       console.error(
         "❌ HMRC SUBMIT ERROR"
-      );
-
-      console.error(
-        "[HMRC FULL ERROR]"
       );
 
       console.error(
