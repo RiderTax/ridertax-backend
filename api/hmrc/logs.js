@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { applyCors } from "../../utils/cors.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -7,24 +6,43 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  if (applyCors(req, res)) return;
-
   try {
     // =========================
-    // ✅ ONLY POST
+    // CORS
     // =========================
-    if (req.method !== "POST") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, OPTIONS"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type"
+    );
+
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
+
+    // =========================
+    // ONLY GET
+    // =========================
+    if (req.method !== "GET") {
       return res.status(405).json({
         success: false,
         error: "Method not allowed",
       });
     }
 
+    // =========================
+    // QUERY PARAMS
+    // =========================
     const {
       user_id,
+      endpoint,
       limit = 50,
       offset = 0,
-    } = req.body || {};
+    } = req.query;
 
     if (!user_id) {
       return res.status(400).json({
@@ -33,85 +51,97 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log(
-      "📜 FETCH HMRC LOGS:",
-      user_id
-    );
-
     // =========================
-    // ✅ FETCH LOGS
+    // BUILD QUERY
     // =========================
-    const {
-      data: logs,
-      error,
-      count,
-    } = await supabase
+    let query = supabase
       .from("hmrc_logs")
-      .select("*", {
-        count: "exact",
-      })
+      .select("*", { count: "exact" })
       .eq("user_id", user_id)
       .order("created_at", {
         ascending: false,
       })
       .range(
-        offset,
-        offset + limit - 1
+        Number(offset),
+        Number(offset) + Number(limit) - 1
       );
 
+    // =========================
+    // OPTIONAL ENDPOINT FILTER
+    // =========================
+    if (endpoint) {
+      query = query.eq("endpoint", endpoint);
+    }
+
+    // =========================
+    // EXECUTE QUERY
+    // =========================
+    const {
+      data,
+      error,
+      count,
+    } = await query;
+
     if (error) {
-      console.error(
-        "❌ LOG FETCH ERROR:",
-        error
-      );
+      console.error("❌ LOG FETCH ERROR:", error);
 
       return res.status(500).json({
         success: false,
-        error:
-          "Failed to fetch logs",
+        error: error.message,
       });
     }
 
     // =========================
-    // ✅ FORMAT LOGS
+    // SANITIZE TOKENS
     // =========================
-    const formattedLogs =
-      (logs || []).map((log) => ({
-        id: log.id,
-        action: log.action,
-        endpoint: log.endpoint || null,
-        status: log.status,
-        correlation_id:
-          log.correlation_id || null,
-        created_at: log.created_at,
-      }));
+    const sanitizedLogs = (data || []).map((log) => {
+      const cleanLog = { ...log };
+
+      // Remove sensitive auth headers
+      if (
+        cleanLog.request_headers?.Authorization
+      ) {
+        cleanLog.request_headers.Authorization =
+          "[REDACTED]";
+      }
+
+      // Remove access tokens from responses
+      if (
+        cleanLog.response_body?.access_token
+      ) {
+        cleanLog.response_body.access_token =
+          "[REDACTED]";
+      }
+
+      if (
+        cleanLog.response_body?.refresh_token
+      ) {
+        cleanLog.response_body.refresh_token =
+          "[REDACTED]";
+      }
+
+      return cleanLog;
+    });
 
     // =========================
-    // ✅ SUCCESS RESPONSE
+    // SUCCESS
     // =========================
     return res.status(200).json({
       success: true,
-
       total: count || 0,
-
-      limit,
-
-      offset,
-
-      logs: formattedLogs,
+      limit: Number(limit),
+      offset: Number(offset),
+      logs: sanitizedLogs,
     });
 
   } catch (err) {
-    console.error(
-      "💥 LOGS ERROR:",
-      err
-    );
+    console.error("💥 LOGS ERROR:", err);
 
     return res.status(500).json({
       success: false,
       error:
         err.message ||
-        "Failed to fetch logs",
+        "Failed to fetch HMRC logs",
     });
   }
 }
