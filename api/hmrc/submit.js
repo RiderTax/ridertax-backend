@@ -55,13 +55,6 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!business_id) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing business_id",
-      });
-    }
-
     if (
       !payload ||
       typeof payload !== "object"
@@ -72,12 +65,26 @@ export default async function handler(req, res) {
       });
     }
 
+    // =========================
+    // SOLE TRADER SUPPORT
+    // =========================
+    const effectiveEntityId =
+      business_id || user_id;
+
+    if (!business_id) {
+      console.log(
+        "👤 [HMRC] Self-employed submission detected"
+      );
+    }
+
     console.log(
       "🚀 HMRC SUBMIT START:",
       {
         user_id,
         tax_year,
-        business_id,
+        business_id:
+          business_id || null,
+        effectiveEntityId,
       }
     );
 
@@ -248,12 +255,25 @@ export default async function handler(req, res) {
     const fraudHeaders =
       buildFraudHeaders(req);
 
+    console.log(
+      "🛡️ HMRC Fraud headers generated"
+    );
+
     // =========================
     // HMRC ENDPOINT
     // =========================
+    // IMPORTANT:
+    // This is currently using
+    // effectiveEntityId fallback.
+    //
+    // Later you should replace with:
+    // hmrc_business_id
+    // once HMRC business source IDs
+    // are implemented properly.
+    // =========================
     const endpoint =
       `${process.env.HMRC_BASE_URL}` +
-      `/individuals/business/self-assessment/${tax_year}/${business_id}`;
+      `/individuals/business/self-assessment/${tax_year}/${effectiveEntityId}`;
 
     console.log(
       "📡 HMRC ENDPOINT:",
