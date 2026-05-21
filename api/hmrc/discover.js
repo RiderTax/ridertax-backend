@@ -3,6 +3,9 @@ import axios from "axios";
 import { createClient }
 from "@supabase/supabase-js";
 
+import { applyCors }
+from "../../utils/cors.js";
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -12,6 +15,11 @@ export default async function handler(
   req,
   res
 ) {
+
+  // =========================
+  // CORS FIX
+  // =========================
+  if (applyCors(req, res)) return;
 
   try {
 
@@ -32,7 +40,7 @@ export default async function handler(
     }
 
     // =========================
-    // GET HMRC TOKEN
+    // GET TOKEN
     // =========================
     const {
       data: tokenRow,
@@ -52,7 +60,7 @@ export default async function handler(
     }
 
     // =========================
-    // CALL HMRC API
+    // HMRC API
     // =========================
     const response =
       await axios.get(
@@ -92,7 +100,9 @@ export default async function handler(
       });
     }
 
+    // =========================
     // IMPORTANT
+    // =========================
     const incomeSourceId =
       source.incomeSourceId;
 
@@ -101,6 +111,17 @@ export default async function handler(
       incomeSourceId
     );
 
+    if (!incomeSourceId) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "incomeSourceId missing",
+      });
+    }
+
+    // =========================
+    // SAVE
+    // =========================
     await supabase
       .from("hmrc_profiles")
       .upsert({
@@ -120,6 +141,10 @@ export default async function handler(
     });
 
   } catch (err) {
+
+    console.error(
+      "DISCOVERY ERROR:"
+    );
 
     console.error(
       err?.response?.data ||
