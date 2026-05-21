@@ -1,41 +1,13 @@
 export function applyCors(req, res) {
 
-  // =========================
-  // ALLOWED ORIGINS
-  // =========================
-  const allowedOrigins = [
-    "https://ridertax.co.uk",
-    "https://www.ridertax.co.uk",
-    "http://localhost:3000",
-  ];
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "*"
+  );
 
-  const origin = req.headers.origin;
-
-  // =========================
-  // SET ORIGIN
-  // =========================
-  if (
-    origin &&
-    allowedOrigins.includes(origin)
-  ) {
-    res.setHeader(
-      "Access-Control-Allow-Origin",
-      origin
-    );
-  } else {
-    // fallback
-    res.setHeader(
-      "Access-Control-Allow-Origin",
-      "https://ridertax.co.uk"
-    );
-  }
-
-  // =========================
-  // CORS HEADERS
-  // =========================
   res.setHeader(
     "Access-Control-Allow-Methods",
-    "GET,POST,PUT,DELETE,OPTIONS"
+    "GET,POST,OPTIONS"
   );
 
   res.setHeader(
@@ -44,15 +16,13 @@ export function applyCors(req, res) {
   );
 
   res.setHeader(
-    "Access-Control-Allow-Credentials",
-    "true"
+    "Access-Control-Max-Age",
+    "86400"
   );
 
-  // =========================
-  // PREFLIGHT
-  // =========================
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    res.status(200).end();
+    return true;
   }
 
   return false;
