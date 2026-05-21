@@ -123,7 +123,7 @@ export default async function handler(
     // =========================
     const hmrcResponse =
       await axios.get(
-        `${process.env.HMRC_BASE_URL}/income-tax-mtd/income-sources`,
+        `${process.env.HMRC_BASE_URL}/income-tax/income-sources`,
         {
           headers: {
             Authorization:
