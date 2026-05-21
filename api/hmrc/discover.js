@@ -45,7 +45,7 @@ export default async function handler(
 ) {
 
   // =========================
-  // ALWAYS APPLY CORS
+  // APPLY CORS
   // =========================
   applyCors(res);
 
@@ -116,10 +116,14 @@ export default async function handler(
       });
     }
 
-    console.log("TOKEN FOUND");
+    console.log(
+      "TOKEN FOUND"
+    );
 
     // =========================
-    // HMRC API CALL
+    // HMRC DISCOVERY API
+    // IMPORTANT:
+    // DO NOT USE income-tax-mtd
     // =========================
     const hmrcResponse =
       await axios.get(
@@ -150,7 +154,7 @@ export default async function handler(
     );
 
     // =========================
-    // SUPPORT MULTIPLE HMRC FORMATS
+    // SUPPORT MULTIPLE FORMATS
     // =========================
     const source =
       hmrcResponse.data
@@ -231,6 +235,7 @@ export default async function handler(
       .from("hmrc_profiles")
       .upsert({
         user_id,
+
         hmrc_business_id:
           incomeSourceId,
       });
