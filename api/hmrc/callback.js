@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { logHmrcEvent } from "../../utils/logHmrcEvent.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -53,22 +54,42 @@ export default async function handler(req, res) {
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Type":
+            "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          client_id: process.env.HMRC_CLIENT_ID,
-          client_secret: process.env.HMRC_CLIENT_SECRET,
-          grant_type: "authorization_code",
-          redirect_uri: process.env.HMRC_REDIRECT_URI,
+          client_id:
+            process.env.HMRC_CLIENT_ID,
+          client_secret:
+            process.env.HMRC_CLIENT_SECRET,
+          grant_type:
+            "authorization_code",
+          redirect_uri:
+            process.env.HMRC_REDIRECT_URI,
           code,
         }),
       }
     );
 
-    const tokenData = await tokenResponse.json();
+    const tokenData =
+      await tokenResponse.json();
 
     if (!tokenResponse.ok) {
-      console.error("❌ HMRC TOKEN ERROR:", tokenData);
+      console.error(
+        "❌ HMRC TOKEN ERROR:",
+        tokenData
+      );
+
+      await logHmrcEvent({
+        user_id: finalUserId,
+        endpoint: "/oauth/token",
+        method: "POST",
+        response_status:
+          tokenResponse.status,
+        response_body: tokenData,
+        error_message:
+          "OAuth token exchange failed",
+      });
 
       return res.status(400).json({
         success: false,
@@ -80,23 +101,41 @@ export default async function handler(req, res) {
     // SAVE TOKENS
     // =========================
     const expiresAt = new Date(
-      Date.now() + tokenData.expires_in * 1000
+      Date.now() +
+        tokenData.expires_in * 1000
     ).toISOString();
 
-    const { error: saveError } = await supabase
-      .from("hmrc_tokens")
-      .upsert({
-        user_id: finalUserId,
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
-        token_type: tokenData.token_type,
-        scope: tokenData.scope,
-        expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
-      });
+    const { error: saveError } =
+      await supabase
+        .from("hmrc_tokens")
+        .upsert({
+          user_id: finalUserId,
+          access_token:
+            tokenData.access_token,
+          refresh_token:
+            tokenData.refresh_token,
+          token_type:
+            tokenData.token_type,
+          scope: tokenData.scope,
+          expires_at: expiresAt,
+          updated_at:
+            new Date().toISOString(),
+        });
 
     if (saveError) {
-      console.error("❌ SUPABASE SAVE ERROR:", saveError);
+      console.error(
+        "❌ SUPABASE SAVE ERROR:",
+        saveError
+      );
+
+      await logHmrcEvent({
+        user_id: finalUserId,
+        endpoint: "/oauth/token",
+        method: "POST",
+        response_status: 500,
+        error_message:
+          saveError.message,
+      });
 
       return res.status(500).json({
         success: false,
@@ -104,7 +143,22 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log("✅ HMRC TOKENS SAVED");
+    // =========================
+    // AUDIT LOG
+    // =========================
+    await logHmrcEvent({
+      user_id: finalUserId,
+      endpoint: "/oauth/token",
+      method: "POST",
+      response_status: 200,
+      response_body: {
+        connected: true,
+      },
+    });
+
+    console.log(
+      "✅ HMRC TOKENS SAVED"
+    );
 
     // =========================
     // REDIRECT BACK TO SETTINGS
@@ -114,7 +168,10 @@ export default async function handler(req, res) {
     );
 
   } catch (err) {
-    console.error("💥 CALLBACK ERROR:", err);
+    console.error(
+      "💥 CALLBACK ERROR:",
+      err
+    );
 
     return res.status(500).json({
       success: false,
