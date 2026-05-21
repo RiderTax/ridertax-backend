@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { applyCors } from "../../utils/cors.js";
+import { logHmrcEvent } from "../../utils/logHmrcEvent.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -10,9 +11,6 @@ export default async function handler(req, res) {
   if (applyCors(req, res)) return;
 
   try {
-    // =========================
-    // ✅ ONLY POST
-    // =========================
     if (req.method !== "POST") {
       return res.status(405).json({
         success: false,
@@ -29,90 +27,39 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log("🔌 HMRC DISCONNECT:", user_id);
+    const { error } = await supabase
+      .from("hmrc_tokens")
+      .delete()
+      .eq("user_id", user_id);
 
-    // =========================
-    // ✅ CHECK EXISTING TOKENS
-    // =========================
-    const { data: tokenRow, error: fetchError } =
-      await supabase
-        .from("hmrc_tokens")
-        .select("*")
-        .eq("user_id", user_id)
-        .maybeSingle();
-
-    if (fetchError) {
-      console.error(
-        "❌ TOKEN FETCH ERROR:",
-        fetchError
-      );
-
-      return res.status(500).json({
-        success: false,
-        error: "Database error",
-      });
-    }
-
-    // =========================
-    // ✅ NO TOKENS FOUND
-    // =========================
-    if (!tokenRow) {
-      return res.status(200).json({
-        success: true,
-        disconnected: true,
-        message:
-          "User already disconnected",
-      });
-    }
-
-    // =========================
-    // ✅ DELETE TOKENS
-    // =========================
-    const { error: deleteError } =
-      await supabase
-        .from("hmrc_tokens")
-        .delete()
-        .eq("user_id", user_id);
-
-    if (deleteError) {
-      console.error(
-        "❌ DELETE ERROR:",
-        deleteError
-      );
-
-      return res.status(500).json({
-        success: false,
-        error:
-          "Failed to disconnect HMRC",
-      });
-    }
-
-    // =========================
-    // ✅ AUDIT LOG
-    // =========================
-    await supabase
-      .from("hmrc_logs")
-      .insert({
+    if (error) {
+      await logHmrcEvent({
         user_id,
-        action: "disconnect",
-        status: "success",
-        created_at:
-          new Date().toISOString(),
+        endpoint: "/disconnect",
+        method: "POST",
+        response_status: 500,
+        error_message: error.message,
       });
 
-    console.log(
-      "✅ HMRC DISCONNECTED:",
-      user_id
-    );
+      return res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
 
-    // =========================
-    // ✅ SUCCESS RESPONSE
-    // =========================
+    await logHmrcEvent({
+      user_id,
+      endpoint: "/disconnect",
+      method: "POST",
+      response_status: 200,
+      response_body: {
+        disconnected: true,
+      },
+    });
+
     return res.status(200).json({
       success: true,
       disconnected: true,
-      message:
-        "HMRC account disconnected successfully",
     });
 
   } catch (err) {
@@ -123,9 +70,7 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       success: false,
-      error:
-        err.message ||
-        "Disconnect failed",
+      error: err.message,
     });
   }
 }
