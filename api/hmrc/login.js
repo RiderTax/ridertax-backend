@@ -5,8 +5,33 @@ export default async function handler(req, res) {
   if (applyCors(req, res)) return;
 
   try {
-    const state = crypto.randomBytes(16).toString("hex");
+    const { user_id } = req.query;
 
+    // =========================
+    // VALIDATE USER
+    // =========================
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing user_id",
+      });
+    }
+
+    // =========================
+    // SECURE STATE
+    // =========================
+    const statePayload = {
+      user_id,
+      csrf: crypto.randomBytes(16).toString("hex"),
+    };
+
+    const state = Buffer.from(
+      JSON.stringify(statePayload)
+    ).toString("base64");
+
+    // =========================
+    // HMRC AUTH URL
+    // =========================
     const params = new URLSearchParams({
       response_type: "code",
 
@@ -24,10 +49,11 @@ export default async function handler(req, res) {
     const authUrl =
       `${process.env.HMRC_AUTH_URL}?${params.toString()}`;
 
+    console.log("✅ HMRC LOGIN USER:", user_id);
+
     return res.status(200).json({
       success: true,
       auth_url: authUrl,
-      state,
     });
 
   } catch (error) {
