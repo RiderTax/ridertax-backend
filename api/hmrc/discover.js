@@ -91,7 +91,7 @@ export default async function handler(
     }
 
     // =========================
-    // GET HMRC TOKEN
+    // GET HMRC TOKEN + NINO
     // =========================
     const {
       data: tokenRow,
@@ -121,13 +121,32 @@ export default async function handler(
     );
 
     // =========================
-    // HMRC DISCOVERY API
-    // IMPORTANT:
-    // DO NOT USE income-tax-mtd
+    // GET NINO
+    // =========================
+    const nino =
+      tokenRow.nino ||
+      tokenRow.hmrc_nino;
+
+    if (!nino) {
+
+      return res.status(400).json({
+        success: false,
+        error:
+          "NINO missing from hmrc_tokens table",
+      });
+    }
+
+    console.log(
+      "USING NINO:",
+      nino
+    );
+
+    // =========================
+    // HMRC BUSINESS DETAILS API
     // =========================
     const hmrcResponse =
       await axios.get(
-        `${process.env.HMRC_BASE_URL}/income-tax/income-sources`,
+        `${process.env.HMRC_BASE_URL}/business-details/business-details/nino/${nino}`,
         {
           headers: {
             Authorization:
@@ -154,20 +173,17 @@ export default async function handler(
     );
 
     // =========================
-    // SUPPORT MULTIPLE FORMATS
+    // BUSINESS SOURCE
     // =========================
     const source =
       hmrcResponse.data
-        ?.selfEmployment?.[0] ||
+        ?.businessData?.[0] ||
 
       hmrcResponse.data
         ?.businesses?.[0] ||
 
       hmrcResponse.data
-        ?.incomeSources?.[0] ||
-
-      hmrcResponse.data
-        ?.properties?.[0];
+        ?.selfEmploymentData?.[0];
 
     console.log(
       "SELECTED SOURCE:"
@@ -186,21 +202,21 @@ export default async function handler(
       return res.status(404).json({
         success: false,
         error:
-          "No HMRC business found",
+          "No HMRC business source found",
         hmrc_response:
           hmrcResponse.data,
       });
     }
 
     // =========================
-    // FLEXIBLE ID EXTRACTION
+    // BUSINESS ID
     // =========================
     const incomeSourceId =
       source.incomeSourceId ||
       source.id ||
       source.incomeSource ||
       source.businessId ||
-      source.sourceId;
+      source.identifier;
 
     console.log(
       "REAL HMRC BUSINESS ID:",
@@ -221,9 +237,9 @@ export default async function handler(
     // BUSINESS NAME
     // =========================
     const businessName =
+      source.tradingName ||
       source.businessName ||
       source.name ||
-      source.tradingName ||
       "HMRC Business";
 
     // =========================
