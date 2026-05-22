@@ -2,14 +2,17 @@ import crypto from "crypto";
 import { applyCors } from "../../utils/cors.js";
 
 export default async function handler(req, res) {
+
   if (applyCors(req, res)) return;
 
   try {
+
     const { user_id } = req.query;
 
     // =========================
     // VALIDATE USER
     // =========================
+
     if (!user_id) {
       return res.status(400).json({
         success: false,
@@ -20,6 +23,7 @@ export default async function handler(req, res) {
     // =========================
     // SECURE STATE
     // =========================
+
     const statePayload = {
       user_id,
       csrf: crypto.randomBytes(16).toString("hex"),
@@ -30,18 +34,30 @@ export default async function handler(req, res) {
     ).toString("base64");
 
     // =========================
+    // HMRC SCOPES
+    // =========================
+
+    const scope = [
+      "read:self-assessment",
+      "write:self-assessment",
+      "openid",
+      "profile"
+    ].join(" ");
+
+    // =========================
     // HMRC AUTH URL
     // =========================
+
     const params = new URLSearchParams({
       response_type: "code",
 
-      client_id: process.env.HMRC_CLIENT_ID,
+      client_id:
+        process.env.HMRC_CLIENT_ID,
 
       redirect_uri:
         process.env.HMRC_REDIRECT_URI,
 
-      scope:
-        "read:self-assessment write:self-assessment",
+      scope,
 
       state,
     });
@@ -49,7 +65,15 @@ export default async function handler(req, res) {
     const authUrl =
       `${process.env.HMRC_AUTH_URL}?${params.toString()}`;
 
-    console.log("✅ HMRC LOGIN USER:", user_id);
+    console.log(
+      "✅ HMRC LOGIN USER:",
+      user_id
+    );
+
+    console.log(
+      "✅ HMRC SCOPE:",
+      scope
+    );
 
     return res.status(200).json({
       success: true,
@@ -57,11 +81,16 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error("HMRC Login Error:", error);
+
+    console.error(
+      "HMRC Login Error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      error: "Failed to generate HMRC login URL",
+      error:
+        "Failed to generate HMRC login URL",
     });
   }
 }
