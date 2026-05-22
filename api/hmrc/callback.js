@@ -33,7 +33,10 @@ export default async function handler(req, res) {
 
         finalUserId = decoded.user_id;
       } catch (err) {
-        console.error("❌ Failed to decode state:", err);
+        console.error(
+          "❌ Failed to decode state:",
+          err
+        );
       }
     }
 
@@ -44,7 +47,10 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log("✅ CALLBACK USER:", finalUserId);
+    console.log(
+      "✅ CALLBACK USER:",
+      finalUserId
+    );
 
     // =========================
     // TOKEN EXCHANGE
@@ -53,19 +59,25 @@ export default async function handler(req, res) {
       `${process.env.HMRC_BASE_URL}/oauth/token`,
       {
         method: "POST",
+
         headers: {
           "Content-Type":
             "application/x-www-form-urlencoded",
         },
+
         body: new URLSearchParams({
           client_id:
             process.env.HMRC_CLIENT_ID,
+
           client_secret:
             process.env.HMRC_CLIENT_SECRET,
+
           grant_type:
             "authorization_code",
+
           redirect_uri:
             process.env.HMRC_REDIRECT_URI,
+
           code,
         }),
       }
@@ -75,6 +87,7 @@ export default async function handler(req, res) {
       await tokenResponse.json();
 
     if (!tokenResponse.ok) {
+
       console.error(
         "❌ HMRC TOKEN ERROR:",
         tokenData
@@ -102,7 +115,7 @@ export default async function handler(req, res) {
     // =========================
     const expiresAt = new Date(
       Date.now() +
-        tokenData.expires_in * 1000
+      tokenData.expires_in * 1000
     ).toISOString();
 
     const { error: saveError } =
@@ -110,32 +123,32 @@ export default async function handler(req, res) {
         .from("hmrc_tokens")
         .upsert({
           user_id: finalUserId,
+
           access_token:
             tokenData.access_token,
+
           refresh_token:
             tokenData.refresh_token,
+
           token_type:
             tokenData.token_type,
-          scope: tokenData.scope,
-          expires_at: expiresAt,
+
+          scope:
+            tokenData.scope,
+
+          expires_at:
+            expiresAt,
+
           updated_at:
             new Date().toISOString(),
         });
 
     if (saveError) {
+
       console.error(
         "❌ SUPABASE SAVE ERROR:",
         saveError
       );
-
-      await logHmrcEvent({
-        user_id: finalUserId,
-        endpoint: "/oauth/token",
-        method: "POST",
-        response_status: 500,
-        error_message:
-          saveError.message,
-      });
 
       return res.status(500).json({
         success: false,
@@ -143,31 +156,123 @@ export default async function handler(req, res) {
       });
     }
 
+    console.log(
+      "✅ TOKENS SAVED"
+    );
+
+    // =========================
+    // FETCH NINO
+    // =========================
+    let nino = null;
+
+    try {
+
+      const ninoResponse = await fetch(
+        `${process.env.HMRC_BASE_URL}/individuals/details`,
+        {
+          method: "GET",
+
+          headers: {
+            Authorization:
+              `Bearer ${tokenData.access_token}`,
+
+            Accept:
+              "application/vnd.hmrc.1.0+json",
+          },
+        }
+      );
+
+      const ninoData =
+        await ninoResponse.json();
+
+      console.log(
+        "✅ INDIVIDUAL DETAILS:"
+      );
+
+      console.log(
+        JSON.stringify(
+          ninoData,
+          null,
+          2
+        )
+      );
+
+      nino =
+        ninoData?.nino ||
+        ninoData?.individual?.nino ||
+        null;
+
+      if (nino) {
+
+        const {
+          error: ninoSaveError,
+        } = await supabase
+          .from("hmrc_tokens")
+          .update({
+            nino,
+          })
+          .eq(
+            "user_id",
+            finalUserId
+          );
+
+        if (ninoSaveError) {
+
+          console.error(
+            "❌ NINO SAVE ERROR:",
+            ninoSaveError
+          );
+
+        } else {
+
+          console.log(
+            "✅ NINO SAVED:",
+            nino
+          );
+        }
+
+      } else {
+
+        console.log(
+          "⚠️ No NINO returned from HMRC"
+        );
+      }
+
+    } catch (ninoErr) {
+
+      console.error(
+        "❌ NINO FETCH ERROR:",
+        ninoErr
+      );
+    }
+
     // =========================
     // AUDIT LOG
     // =========================
     await logHmrcEvent({
       user_id: finalUserId,
+
       endpoint: "/oauth/token",
+
       method: "POST",
+
       response_status: 200,
+
       response_body: {
         connected: true,
+        nino_saved: !!nino,
       },
     });
 
-    console.log(
-      "✅ HMRC TOKENS SAVED"
-    );
-
     // =========================
-    // REDIRECT BACK TO SETTINGS
+    // SUCCESS REDIRECT
     // =========================
     return res.redirect(
       `https://ridertax.co.uk/Settings?tab=hmrc&connected=true`
     );
 
   } catch (err) {
+
     console.error(
       "💥 CALLBACK ERROR:",
       err
