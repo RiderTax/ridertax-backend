@@ -91,7 +91,7 @@ export default async function handler(
     }
 
     // =========================
-    // GET HMRC TOKEN + NINO
+    // GET HMRC TOKEN
     // =========================
     const {
       data: tokenRow,
@@ -121,32 +121,27 @@ export default async function handler(
     );
 
     // =========================
-    // GET NINO
+    // VALIDATE ACCESS TOKEN
     // =========================
-    const nino =
-      tokenRow.nino ||
-      tokenRow.hmrc_nino;
-
-    if (!nino) {
+    if (!tokenRow.access_token) {
 
       return res.status(400).json({
         success: false,
         error:
-          "NINO missing from hmrc_tokens table",
+          "Access token missing",
       });
     }
 
+    // =========================
+    // HMRC MTD INCOME SOURCES
+    // =========================
     console.log(
-      "USING NINO:",
-      nino
+      "CALLING HMRC INCOME SOURCES API"
     );
 
-    // =========================
-    // HMRC BUSINESS DETAILS API
-    // =========================
     const hmrcResponse =
       await axios.get(
-        `${process.env.HMRC_BASE_URL}/business-details/business-details/nino/${nino}`,
+        `${process.env.HMRC_BASE_URL}/income-tax-mtd/income-sources`,
         {
           headers: {
             Authorization:
@@ -173,17 +168,20 @@ export default async function handler(
     );
 
     // =========================
-    // BUSINESS SOURCE
+    // EXTRACT BUSINESS SOURCE
     // =========================
     const source =
       hmrcResponse.data
-        ?.businessData?.[0] ||
+        ?.selfEmployment?.[0] ||
 
       hmrcResponse.data
         ?.businesses?.[0] ||
 
       hmrcResponse.data
-        ?.selfEmploymentData?.[0];
+        ?.incomeSources?.[0] ||
+
+      hmrcResponse.data
+        ?.property?.[0];
 
     console.log(
       "SELECTED SOURCE:"
