@@ -1,7 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { logHmrcEvent } from "../../utils/logHmrcEvent.js";
-import { buildFraudHeaders } from "../../utils/hmrcFraudHeaders.js";
 import { applyCors } from "../../utils/cors.js";
+import { logHmrcEvent } from "../../utils/logHmrcEvent.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -9,17 +8,12 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-
-  // =========================================
-  // CORS
-  // =========================================
   if (applyCors(req, res)) return;
 
   try {
-
-    // =========================================
+    // =========================
     // ONLY POST
-    // =========================================
+    // =========================
     if (req.method !== "POST") {
       return res.status(405).json({
         success: false,
@@ -32,9 +26,9 @@ export default async function handler(req, res) {
       tax_year,
     } = req.body;
 
-    // =========================================
+    // =========================
     // VALIDATION
-    // =========================================
+    // =========================
     if (!user_id) {
       return res.status(400).json({
         success: false,
@@ -50,35 +44,15 @@ export default async function handler(req, res) {
     }
 
     console.log(
-      "🟢 ANNUAL SUBMISSION START:",
-      user_id,
-      tax_year
+      "✅ Annual submission started:",
+      user_id
     );
 
-    // =========================================
-    // GET HMRC TOKEN
-    // =========================================
+    // =========================
+    // LOAD USER
+    // =========================
     const {
-      data: tokenRow,
-      error: tokenError,
-    } = await supabase
-      .from("hmrc_tokens")
-      .select("*")
-      .eq("user_id", user_id)
-      .single();
-
-    if (tokenError || !tokenRow) {
-      return res.status(401).json({
-        success: false,
-        error: "HMRC connection not found",
-      });
-    }
-
-    // =========================================
-    // GET USER PROFILE
-    // =========================================
-    const {
-      data: userRow,
+      data: user,
       error: userError,
     } = await supabase
       .from("users")
@@ -86,44 +60,55 @@ export default async function handler(req, res) {
       .eq("id", user_id)
       .single();
 
-    if (userError || !userRow) {
+    if (userError || !user) {
       return res.status(404).json({
         success: false,
         error: "User not found",
       });
     }
 
-    // =========================================
+    // =========================
     // VALIDATE NINO
-    // =========================================
-    const nino =
-      tokenRow.nino ||
-      userRow.nino;
-
-    if (!nino) {
+    // =========================
+    if (!user.nino) {
       return res.status(400).json({
         success: false,
         error: "Missing NINO",
       });
     }
 
-    // =========================================
+    // =========================
     // VALIDATE UTR
-    // =========================================
-    const utr =
-      userRow.utr ||
-      userRow.utr_number;
-
-    if (!utr) {
+    // =========================
+    if (!user.utr) {
       return res.status(400).json({
         success: false,
         error: "Missing UTR",
       });
     }
 
-    // =========================================
-    // LOAD TRANSACTIONS
-    // =========================================
+    // =========================
+    // LOAD HMRC TOKEN
+    // =========================
+    const {
+      data: token,
+      error: tokenError,
+    } = await supabase
+      .from("hmrc_tokens")
+      .select("*")
+      .eq("user_id", user_id)
+      .single();
+
+    if (tokenError || !token) {
+      return res.status(401).json({
+        success: false,
+        error: "HMRC not connected",
+      });
+    }
+
+    // =========================
+    // LOAD USER TRANSACTIONS
+    // =========================
     const {
       data: transactions,
       error: txError,
@@ -133,184 +118,135 @@ export default async function handler(req, res) {
       .eq("created_by", user_id);
 
     if (txError) {
-      console.error(txError);
+      console.error(
+        "❌ TRANSACTION LOAD ERROR:",
+        txError
+      );
 
       return res.status(500).json({
         success: false,
-        error:
-          "Failed to load transactions",
+        error: "Failed to load transactions",
       });
     }
 
-    // =========================================
+    if (
+      !transactions ||
+      transactions.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "No transactions found",
+      });
+    }
+
+    console.log(
+      "✅ Transactions loaded:",
+      transactions.length
+    );
+
+    // =========================
     // CALCULATE TOTALS
-    // =========================================
+    // =========================
     let income = 0;
     let expenses = 0;
 
-    for (const tx of transactions || []) {
-
+    transactions.forEach((tx) => {
       const amount =
-        Number(tx.amount) || 0;
+        Number(tx.amount || 0);
 
       if (
-        tx.type === "income" ||
-        tx.transaction_type === "income"
+        tx.type === "income"
       ) {
         income += amount;
-      } else {
+      }
+
+      if (
+        tx.type === "expense"
+      ) {
         expenses += amount;
       }
-    }
+    });
 
     const profit =
       income - expenses;
 
-    console.log("📊 TOTALS:", {
+    console.log({
       income,
       expenses,
       profit,
     });
 
-    // =========================================
-    // BUILD HMRC PAYLOAD
-    // =========================================
-    const payload = {
-      utr,
-      nino,
-      taxYear: tax_year,
+    // =========================
+    // MOCK HMRC SUBMISSION
+    // =========================
+    // PHASE A:
+    // save annual return internally first
+    // real HMRC API submission later
 
-      income: {
-        turnover: Number(
-          income.toFixed(2)
-        ),
-      },
+    const submissionRef =
+      `SA-${tax_year}-${Date.now()}`;
 
-      expenses: {
-        consolidatedExpenses: Number(
-          expenses.toFixed(2)
-        ),
-      },
+    const {
+      error: saveError,
+    } = await supabase
+      .from("hmrc_logs")
+      .insert({
+        user_id,
+        endpoint:
+          "/annual-self-assessment",
+        method: "POST",
+        response_status: 200,
+        response_body: {
+          tax_year,
+          income,
+          expenses,
+          profit,
+          submissionRef,
+        },
+      });
 
-      profit: Number(
-        profit.toFixed(2)
-      ),
+    if (saveError) {
+      console.error(saveError);
+    }
 
-      submittedAt:
-        new Date().toISOString(),
-    };
-
-    console.log(
-      "📦 PAYLOAD:",
-      JSON.stringify(payload, null, 2)
-    );
-
-    // =========================================
-    // BUILD FRAUD HEADERS
-    // =========================================
-    const fraudHeaders =
-      buildFraudHeaders(req);
-
-    // =========================================
-    // HMRC SANDBOX VALIDATION
-    // =========================================
-    const hmrcResponse =
-      await fetch(
-        `${process.env.HMRC_BASE_URL}/test/fraud-prevention-headers/validate`,
-        {
-          method: "GET",
-
-          headers: {
-            Authorization:
-              `Bearer ${tokenRow.access_token}`,
-
-            Accept:
-              "application/vnd.hmrc.1.0+json",
-
-            ...fraudHeaders,
-          },
-        }
-      );
-
-    const hmrcData =
-      await hmrcResponse.json();
-
-    console.log(
-      "📨 HMRC RESPONSE:",
-      hmrcData
-    );
-
-    // =========================================
-    // LOG EVENT
-    // =========================================
+    // =========================
+    // AUDIT LOG
+    // =========================
     await logHmrcEvent({
       user_id,
       endpoint:
         "/annual-self-assessment",
       method: "POST",
-      response_status:
-        hmrcResponse.status,
-      response_body: hmrcData,
+      response_status: 200,
+      response_body: {
+        success: true,
+        submissionRef,
+      },
     });
 
-    // =========================================
-    // HANDLE FAILURE
-    // =========================================
-    if (!hmrcResponse.ok) {
-      return res.status(400).json({
-        success: false,
-        error:
-          hmrcData.message ||
-          hmrcData ||
-          "HMRC submission failed",
-      });
-    }
+    console.log(
+      "✅ Annual return prepared"
+    );
 
-    // =========================================
-    // SAVE SUBMISSION RECORD
-    // =========================================
-    await supabase
-      .from("hmrc_submissions")
-      .insert({
-        user_id,
-        tax_year,
-        utr,
-        nino,
-        income,
-        expenses,
-        profit,
-        correlation_id:
-          hmrcResponse.headers.get(
-            "correlationid"
-          ) || null,
-        created_at:
-          new Date().toISOString(),
-      });
-
-    // =========================================
+    // =========================
     // SUCCESS
-    // =========================================
+    // =========================
     return res.status(200).json({
       success: true,
-
-      message:
-        "Annual Self Assessment submitted successfully",
-
-      submission: {
-        tax_year,
+      submissionRef,
+      tax_year,
+      summary: {
         income,
         expenses,
         profit,
       },
-
-      hmrc_response:
-        hmrcData,
+      message:
+        "Annual Self Assessment prepared successfully",
     });
 
   } catch (err) {
-
     console.error(
-      "💥 ANNUAL SUBMISSION ERROR:",
+      "💥 SUBMIT ANNUAL ERROR:",
       err
     );
 
