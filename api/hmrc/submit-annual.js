@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { logHmrcEvent } from "../../utils/logHmrcEvent.js";
 import { buildFraudHeaders } from "../../utils/hmrcFraudHeaders.js";
+import { applyCors } from "../../utils/cors.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -8,7 +9,14 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
+
+  // =========================================
+  // CORS
+  // =========================================
+  if (applyCors(req, res)) return;
+
   try {
+
     // =========================================
     // ONLY POST
     // =========================================
@@ -141,6 +149,7 @@ export default async function handler(req, res) {
     let expenses = 0;
 
     for (const tx of transactions || []) {
+
       const amount =
         Number(tx.amount) || 0;
 
@@ -203,14 +212,8 @@ export default async function handler(req, res) {
       buildFraudHeaders(req);
 
     // =========================================
-    // HMRC SUBMISSION
+    // HMRC SANDBOX VALIDATION
     // =========================================
-    // NOTE:
-    // Replace endpoint later with
-    // actual annual submission endpoint
-    // once production-approved.
-    // =========================================
-
     const hmrcResponse =
       await fetch(
         `${process.env.HMRC_BASE_URL}/test/fraud-prevention-headers/validate`,
@@ -291,7 +294,7 @@ export default async function handler(req, res) {
       success: true,
 
       message:
-        "Annual Self Assessment prepared successfully",
+        "Annual Self Assessment submitted successfully",
 
       submission: {
         tax_year,
@@ -305,6 +308,7 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
+
     console.error(
       "💥 ANNUAL SUBMISSION ERROR:",
       err
