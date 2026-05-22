@@ -1,19 +1,46 @@
 import { createClient } from "@supabase/supabase-js";
-import { applyCors } from "../../utils/applyCors.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-export default async function handler(req, res) {
-  applyCors(req, res);
+function applyCors(req, res) {
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "https://ridertax.co.uk"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,OPTIONS"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
 
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    res.status(200).end();
+    return true;
   }
 
+  return false;
+}
+
+export default async function handler(req, res) {
+
+  // =========================
+  // APPLY CORS
+  // =========================
+
+  const ended = applyCors(req, res);
+
+  if (ended) return;
+
   try {
+
     const {
       user_id,
       user_email,
@@ -34,9 +61,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // =====================================
+    // =========================
     // LOAD USER
-    // =====================================
+    // =========================
 
     const { data: user, error: userError } =
       await supabase
@@ -69,9 +96,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // =====================================
-    // FETCH ANNUAL SUMMARY FROM BASE44
-    // =====================================
+    // =========================
+    // FETCH BASE44 SUMMARY
+    // =========================
 
     const annualResponse = await fetch(
       process.env.BASE44_ANNUAL_SUMMARY_URL,
@@ -79,7 +106,8 @@ export default async function handler(req, res) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": process.env.BASE44_SECRET
+          "x-api-key":
+            process.env.BASE44_SECRET
         },
         body: JSON.stringify({
           user_email,
@@ -88,7 +116,8 @@ export default async function handler(req, res) {
       }
     );
 
-    const annualData = await annualResponse.json();
+    const annualData =
+      await annualResponse.json();
 
     if (!annualData.success) {
       return res.status(500).json({
@@ -101,18 +130,22 @@ export default async function handler(req, res) {
 
     const summary = annualData.summary;
 
-    // =====================================
+    // =========================
     // HMRC PAYLOAD
-    // =====================================
+    // =========================
 
     const hmrcPayload = {
       nino,
       utr,
       taxYear: tax_year,
-      income: summary.income || 0,
-      expenses: summary.expenses || 0,
-      mileage: summary.mileage_deduction || 0,
-      profit: summary.profit || 0
+      income:
+        summary.income || 0,
+      expenses:
+        summary.expenses || 0,
+      mileage:
+        summary.mileage_deduction || 0,
+      profit:
+        summary.profit || 0
     };
 
     console.log(
@@ -120,14 +153,12 @@ export default async function handler(req, res) {
       hmrcPayload
     );
 
-    // =====================================
-    // SANDBOX SUCCESS RESPONSE
-    // =====================================
+    // =========================
+    // SUCCESS
+    // =========================
 
     return res.status(200).json({
       success: true,
-      message:
-        "Annual Self Assessment submitted successfully",
       submission_id:
         "SA-" +
         Math.random()
@@ -138,6 +169,7 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
+
     console.error(
       "❌ SUBMIT ANNUAL ERROR:",
       err
